@@ -141,23 +141,30 @@ export default {
             return true;
           } catch { return false; }
         });
-        const terms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3 && !["ferienwohnung", "unterkunft", "unterkünfte", "tegernsee", "finden", "suche"].includes(x));
+        const stopTerms = ["ferienwohnung", "ferienwohnungen", "unterkunft", "unterkünfte", "tegernsee", "finden", "suche", "gastgeber", "zimmer", "apartment", "apartments", "ferienhaus", "preise", "kontakt", "offizielle", "website"];
+        const terms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3 && !stopTerms.includes(x));
         const scored = rawResults.map(item => {
           const url = String(item.url || "");
           const host = (() => { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } })();
           const title = String(item.title || "");
           const content = String(item.content || "");
+          const titleText = (title + " " + url).toLowerCase();
           const haystack = (title + " " + content + " " + url).toLowerCase();
-          const matchCount = terms.filter(term => haystack.includes(term)).length;
+          const matchedTerms = terms.filter(term => haystack.includes(term));
+          const titleMatchCount = terms.filter(term => titleText.includes(term)).length;
+          const matchCount = matchedTerms.length;
           const officialTegernsee = host === "tegernsee.com" || host.endsWith(".tegernsee.com");
           const likelyHostSite = !["bayregio.de", "booking.com", "airbnb.de", "tripadvisor.de"].some(domain => host === domain || host.endsWith("." + domain));
-          const unrelated = terms.length >= 1 && matchCount === 0;
-          return { item, host, matchCount, officialTegernsee, likelyHostSite, unrelated };
+          // When a name was provided, matches in the title/URL are stronger evidence than incidental mentions in long snippets.
+          const unrelated = terms.length > 0 && titleMatchCount === 0 && matchCount === 0;
+          const weakIdentity = terms.length > 0 && titleMatchCount === 0 && matchCount > 0;
+          return { item, host, matchCount, titleMatchCount, officialTegernsee, likelyHostSite, unrelated, weakIdentity };
         });
-        // For a specific property search, hide clearly unrelated results instead of mixing nearby hosts into one draft.
-        const hasSpecificName = terms.length > 0;
-        const relevant = scored.filter(x => !x.unrelated || x.officialTegernsee || x.matchCount > 0);
-        const results = (relevant.length ? relevant : scored).slice(0, 8);
+        // Prefer direct name matches. Keep official regional directory entries as reviewable sources,
+        // but do not pad a property-specific draft with unrelated nearby accommodation listings.
+        const directMatches = scored.filter(x => x.titleMatchCount > 0 || x.officialTegernsee && x.matchCount > 0);
+        const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.officialTegernsee || x.matchCount >= Math.min(2, terms.length)));
+        const results = (directMatches.length ? relevant : scored.filter(x => !x.unrelated)).slice(0, 8);
         const sources = results.map(x => x.item.url).slice(0, 8);
         const researchResults = results.map(({ item, host, matchCount, officialTegernsee, likelyHostSite, unrelated }) => ({
           title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
