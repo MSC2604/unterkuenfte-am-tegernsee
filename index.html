@@ -219,7 +219,23 @@ browseCards.forEach(button=>button.addEventListener('click',()=>{
  setType(button.dataset.browseType);
  document.querySelector('.search-panel').scrollIntoView({behavior:'smooth',block:'center'});
 }));
+function syncDateLimits(){
+ arrival.max=departure.value||'';
+ departure.min=arrival.value||'';
+ if(arrival.value&&departure.value&&departure.value<=arrival.value)departure.setCustomValidity('Die Abreise muss nach der Anreise liegen.');
+ else departure.setCustomValidity('');
+}
+arrival.addEventListener('change',syncDateLimits);
+departure.addEventListener('change',syncDateLimits);
+syncDateLimits();
 function showPreparationNotice(){
+ syncDateLimits();
+ if(!arrival.reportValidity()||!departure.reportValidity())return;
+ if(arrival.value&&departure.value&&departure.value<=arrival.value){
+  departure.setCustomValidity('Die Abreise muss nach der Anreise liegen.');
+  departure.reportValidity();
+  return;
+ }
  const status=document.querySelector('.listing-status');
  const query=search.value.trim();
  const selectedPlace=place.value;
