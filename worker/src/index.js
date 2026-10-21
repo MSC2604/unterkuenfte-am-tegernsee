@@ -112,7 +112,7 @@ export default {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               api_key: env.TAVILY_API_KEY,
-              query: query + " site:tegernsee.com/gastgeberverzeichnis OR offizielle Gastgeber-Website Unterkunft Ferienwohnung Zimmer Apartments Ferienhaus Preise Kontakt",
+              query: query + " Tegernsee Unterkunft Gastgeber Ferienwohnung Zimmer Apartment Ferienhaus offizielle Website Preise Kontakt",
               search_depth: "basic",
               max_results: 8,
               include_answer: false
