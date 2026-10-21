@@ -2,9 +2,8 @@ name = "unterkuenfte-am-tegernsee-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
-# Vor dem Deploy eine eigene D1-Datenbank erstellen und database_id einsetzen.
-# Diese Datenbank darf NICHT die Restaurant-Datenbank verwenden.
+# Eigene D1-Datenbank fuer Unterkuenfte; getrennt von der Restaurant-App.
 [[d1_databases]]
 binding = "DB"
 database_name = "unterkuenfte-am-tegernsee"
-database_id = "HIER_DIE_NEUE_D1_DATABASE_ID_EINTRAGEN"
+database_id = "d7bdc69e-4610-402f-9154-0c0e13f46022"
