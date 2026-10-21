@@ -23,8 +23,10 @@ jobs:
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
-      - name: GitHub Pages konfigurieren
+      - name: GitHub Pages aktivieren und konfigurieren
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Website-Dateien bereitstellen
         uses: actions/upload-pages-artifact@v3
         with:
