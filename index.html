@@ -240,7 +240,7 @@ function accommodationCard(a){
  const prices=Array.isArray(a.prices)?a.prices:[];
  const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined);
  const lowest=validPrices.length?Math.min(...validPrices.map(p=>Number(p.price_amount))):null;
- const priceLine=lowest===null?'Preis auf Anfrage':'Ab '+money(lowest,validPrices[0]?.currency||'EUR');
+ const lowestOffer=validPrices.find(p=>Number(p.price_amount)===lowest);const isStartingPrice=/ab[- ]?preis|^ab\b/i.test(String(lowestOffer?.season_label||''));const priceLine=lowest===null?'Preis auf Anfrage':(isStartingPrice?'Ab ':'')+money(lowest,lowestOffer?.currency||'EUR');
  const details=prices.length?prices.map(p=>'<div class="result-unit"><div class="result-unit-row"><strong>'+esc(p.season_label||p.price_unit||'Preisangebot')+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':money(p.price_amount,p.currency||'EUR'))+'</strong></div><small>'+esc(p.price_unit||'')+(p.valid_from||p.valid_to?' · Gültigkeit: '+esc(p.valid_from||'offen')+' bis '+esc(p.valid_to||'offen'):' · Zeitraum nicht bestätigt')+'</small>'+(p.source_url?'<p class="result-note">Quelle: <a href="'+esc(p.source_url)+'" target="_blank" rel="noopener noreferrer">'+esc(p.source_name||'Originalquelle')+'</a></p>':'')+(p.additional_costs_note?'<p class="result-note">'+esc(p.additional_costs_note)+'</p>':'')+'</div>').join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
  const actions=[];
  if(a.contact_phone)actions.push('<a href="tel:'+esc(a.contact_phone)+'">Anrufen</a>');
