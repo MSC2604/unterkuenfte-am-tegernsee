@@ -1,0 +1,146 @@
+const JSON_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET,POST,OPTIONS",
+  "access-control-allow-headers": "Content-Type, Authorization"
+};
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+}
+function adminAuthorized(request, env) {
+  const token = env.ADMIN_TOKEN;
+  if (!token) return false;
+  return request.headers.get("authorization") === `Bearer ${token}`;
+}
+function id() {
+  return crypto.randomUUID();
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: JSON_HEADERS });
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    if (request.method === "GET" && path === "/api/health") {
+      try {
+        await env.DB.prepare("SELECT 1").first();
+        return json({ ok: true, service: "unterkuenfte-am-tegernsee-api", database: true });
+      } catch {
+        return json({ ok: false, database: false, error: "Datenbank nicht erreichbar oder nicht eingerichtet." }, 503);
+      }
+    }
+
+    if (request.method === "GET" && path === "/api/accommodations") {
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
+                  a.website_url, a.contact_email, a.contact_phone, a.booking_url,
+                  a.updated_at
+             FROM accommodations a
+            WHERE a.published = 1
+            ORDER BY a.name COLLATE NOCASE`
+        ).all();
+        const offers = await env.DB.prepare(
+          `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
+                  p.min_nights, p.season_label, p.valid_from, p.valid_to,
+                  p.arrival_date, p.departure_date, p.extra_cleaning_amount,
+                  p.tourist_tax_note, p.additional_costs_note, p.price_on_request,
+                  p.source_url, p.source_name, p.researched_at
+             FROM price_offers p
+             JOIN accommodations a ON a.id = p.accommodation_id
+            WHERE a.published = 1
+            ORDER BY p.researched_at DESC`
+        ).all();
+        const byAccommodation = new Map();
+        for (const offer of offers.results) {
+          if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
+          byAccommodation.get(offer.accommodation_id).push(offer);
+        }
+        return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
+      } catch {
+        return json({ error: "Unterkünfte konnten nicht geladen werden. Datenbank-Schema prüfen." }, 503);
+      }
+    }
+
+    if (path.startsWith("/api/admin/")) {
+      if (!adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (request.method === "GET" && path === "/api/admin/drafts") {
+        const { results } = await env.DB.prepare(
+          "SELECT id, query, payload_json, source_urls_json, status, researched_at FROM research_drafts WHERE status = 'pending' ORDER BY researched_at DESC"
+        ).all();
+        return json({ drafts: results });
+      }
+      if (request.method === "POST" && path === "/api/admin/drafts") {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
+        if (!body || typeof body.query !== "string" || typeof body.payload !== "object" || body.payload === null) {
+          return json({ error: "query und payload sind erforderlich." }, 400);
+        }
+        const draftId = id();
+        const sources = Array.isArray(body.source_urls) ? body.source_urls.filter(x => typeof x === "string").slice(0, 30) : [];
+        await env.DB.prepare(
+          "INSERT INTO research_drafts (id, query, payload_json, source_urls_json, status) VALUES (?, ?, ?, ?, 'pending')"
+        ).bind(draftId, body.query.slice(0, 500), JSON.stringify(body.payload), JSON.stringify(sources)).run();
+        return json({ id: draftId, status: "pending", message: "Als Entwurf gespeichert; noch nicht veröffentlicht." }, 201);
+      }
+      if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/reject$/.test(path)) {
+        const draftId = path.split("/")[4];
+        const result = await env.DB.prepare(
+          "UPDATE research_drafts SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'"
+        ).bind(draftId).run();
+        return json({ success: (result.meta?.changes || 0) > 0 });
+      }
+      if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/approve$/.test(path)) {
+        const draftId = path.split("/")[4];
+        const draft = await env.DB.prepare(
+          "SELECT id, payload_json, source_urls_json FROM research_drafts WHERE id = ? AND status = 'pending'"
+        ).bind(draftId).first();
+        if (!draft) return json({ error: "Entwurf nicht gefunden oder bereits bearbeitet." }, 404);
+        let payload;
+        try { payload = JSON.parse(draft.payload_json); } catch { return json({ error: "Entwurfsdaten sind ungültig." }, 400); }
+        if (!payload.name || typeof payload.name !== "string") return json({ error: "Vor Freigabe muss ein Unterkunftsname vorhanden sein." }, 400);
+        const accommodationId = id();
+        const fields = ["town", "address", "type", "description", "website_url", "contact_email", "contact_phone", "booking_url"];
+        const values = fields.map(key => typeof payload[key] === "string" ? payload[key].slice(0, 3000) : null);
+        const batch = [
+          env.DB.prepare(
+            `INSERT INTO accommodations (id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url, published)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
+          ).bind(accommodationId, payload.name.slice(0, 300), ...values)
+        ];
+        const prices = Array.isArray(payload.prices) ? payload.prices.slice(0, 30) : [];
+        for (const price of prices) {
+          const sourceUrl = typeof price.source_url === "string" ? price.source_url : null;
+          if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) continue;
+          const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
+          batch.push(env.DB.prepare(
+            `INSERT INTO price_offers
+             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
+             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(id(), accommodationId, amount,
+            typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
+            Number.isInteger(price.min_nights) ? price.min_nights : null,
+            typeof price.season_label === "string" ? price.season_label.slice(0, 200) : null,
+            typeof price.valid_from === "string" ? price.valid_from : null,
+            typeof price.valid_to === "string" ? price.valid_to : null,
+            typeof price.arrival_date === "string" ? price.arrival_date : null,
+            typeof price.departure_date === "string" ? price.departure_date : null,
+            Number.isFinite(Number(price.extra_cleaning_amount)) && price.extra_cleaning_amount !== null && price.extra_cleaning_amount !== "" ? Number(price.extra_cleaning_amount) : null,
+            typeof price.tourist_tax_note === "string" ? price.tourist_tax_note.slice(0, 1000) : null,
+            typeof price.additional_costs_note === "string" ? price.additional_costs_note.slice(0, 1000) : null,
+            price.price_on_request ? 1 : 0, sourceUrl.slice(0, 2000),
+            typeof price.source_name === "string" ? price.source_name.slice(0, 300) : null));
+        }
+        batch.push(env.DB.prepare(
+          "UPDATE research_drafts SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'"
+        ).bind(draftId));
+        await env.DB.batch(batch);
+        return json({ success: true, accommodation_id: accommodationId, prices_saved: prices.length });
+      }
+    }
+    return json({ error: "Nicht gefunden." }, 404);
+  }
+};
