@@ -178,6 +178,22 @@ export default {
         ).bind(draftId, body.query.slice(0, 500), JSON.stringify(body.payload), JSON.stringify(sources)).run();
         return json({ id: draftId, status: "pending", message: "Als Entwurf gespeichert; noch nicht veröffentlicht." }, 201);
       }
+      if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/update$/.test(path)) {
+        const draftId = path.split("/")[4];
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
+        if (!body || typeof body.payload !== "object" || body.payload === null || Array.isArray(body.payload)) {
+          return json({ error: "Ein gültiges payload-Objekt ist erforderlich." }, 400);
+        }
+        const existing = await env.DB.prepare(
+          "SELECT id FROM research_drafts WHERE id = ? AND status = 'pending'"
+        ).bind(draftId).first();
+        if (!existing) return json({ error: "Entwurf nicht gefunden oder bereits bearbeitet." }, 404);
+        const result = await env.DB.prepare(
+          "UPDATE research_drafts SET payload_json = ? WHERE id = ? AND status = 'pending'"
+        ).bind(JSON.stringify(body.payload), draftId).run();
+        return json({ success: (result.meta?.changes || 0) > 0, message: "Entwurf gespeichert, noch nicht veröffentlicht." });
+      }
       if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/reject$/.test(path)) {
         const draftId = path.split("/")[4];
         const result = await env.DB.prepare(
