@@ -35,14 +35,21 @@ export default {
 
     if (request.method === "GET" && path === "/api/accommodations") {
       try {
+        // Optional filters for the public accommodation search. Values are bound, never interpolated into SQL.
+        const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
+        const town = (url.searchParams.get("town") || "").trim().slice(0, 100);
+        const type = (url.searchParams.get("type") || "").trim().slice(0, 80);
         const { results } = await env.DB.prepare(
           `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
                   a.website_url, a.contact_email, a.contact_phone, a.booking_url,
                   a.updated_at
              FROM accommodations a
             WHERE a.published = 1
+              AND (? = '' OR lower(a.name) LIKE lower(?) OR lower(coalesce(a.description, '')) LIKE lower(?))
+              AND (? = '' OR lower(coalesce(a.town, '')) = lower(?))
+              AND (? = '' OR lower(coalesce(a.type, '')) = lower(?))
             ORDER BY a.name COLLATE NOCASE`
-        ).all();
+        ).bind(q, `%${q}%`, `%${q}%`, town, town, type, type).all();
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.valid_from, p.valid_to,
