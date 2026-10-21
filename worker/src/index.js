@@ -129,7 +129,7 @@ export default {
           return json({ error: "Der Suchanbieter hat keine lesbare Antwort geliefert." }, 502);
         }
         const seenUrls = new Set();
-        const results = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
+        const rawResults = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
           if (typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) return false;
           try {
             const u = new URL(item.url);
@@ -140,16 +140,33 @@ export default {
             seenUrls.add(normalized);
             return true;
           } catch { return false; }
-        }).slice(0, 8);
-        const sources = results
-          .filter(item => typeof item.url === "string" && /^https?:\/\//i.test(item.url))
-          .map(item => item.url)
-          .slice(0, 5);
-        const researchResults = results.map(item => ({
+        });
+        const terms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3 && !["ferienwohnung", "unterkunft", "unterkünfte", "tegernsee", "finden", "suche"].includes(x));
+        const scored = rawResults.map(item => {
+          const url = String(item.url || "");
+          const host = (() => { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } })();
+          const title = String(item.title || "");
+          const content = String(item.content || "");
+          const haystack = (title + " " + content + " " + url).toLowerCase();
+          const matchCount = terms.filter(term => haystack.includes(term)).length;
+          const officialTegernsee = host === "tegernsee.com" || host.endsWith(".tegernsee.com");
+          const likelyHostSite = !["bayregio.de", "booking.com", "airbnb.de", "tripadvisor.de"].some(domain => host === domain || host.endsWith("." + domain));
+          const unrelated = terms.length >= 1 && matchCount === 0;
+          return { item, host, matchCount, officialTegernsee, likelyHostSite, unrelated };
+        });
+        // For a specific property search, hide clearly unrelated results instead of mixing nearby hosts into one draft.
+        const hasSpecificName = terms.length > 0;
+        const relevant = scored.filter(x => !x.unrelated || x.officialTegernsee || x.matchCount > 0);
+        const results = (relevant.length ? relevant : scored).slice(0, 8);
+        const sources = results.map(x => x.item.url).slice(0, 8);
+        const researchResults = results.map(({ item, host, matchCount, officialTegernsee, likelyHostSite, unrelated }) => ({
           title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
           url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "",
           content: typeof item.content === "string" ? item.content.slice(0, 1600) : "",
-          published_date: typeof item.published_date === "string" ? item.published_date : null
+          published_date: typeof item.published_date === "string" ? item.published_date : null,
+          source_type: officialTegernsee ? "Tegernsee.com – Gastgeberquelle" : (likelyHostSite ? "Mögliche Gastgeber- oder Buchungsseite" : "Drittanbieter – Zuordnung prüfen"),
+          match_count: matchCount,
+          needs_identity_check: unrelated
         }));
         const draftId = id();
         const payload = {
