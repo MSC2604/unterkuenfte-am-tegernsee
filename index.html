@@ -50,6 +50,14 @@ input::placeholder{color:#829197}
 .browse-card h3{margin:0;font-size:16px;color:var(--navy)}
 .browse-card p{margin:4px 0 0;font-size:13px;color:var(--muted)}
 .listing-status{margin-top:28px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start}
+.price-guide{margin-top:28px}
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.price-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px}
+.price-card .price-icon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:#e7f2ee;font-size:20px;margin-bottom:12px}
+.price-card h3{margin:0 0 8px;font-size:16px;color:var(--navy)}
+.price-value{font-size:20px;font-weight:800;color:#326d63;letter-spacing:-.4px}
+.price-card p{font-size:13px;color:var(--muted);margin:7px 0 0}
+.price-disclaimer{font-size:13px;color:var(--muted);margin:12px 2px 0}
 .status-icon{width:52px;height:52px;border-radius:17px;background:#f4f1e7;display:grid;place-items:center;font-size:25px}
 .listing-status h2{margin:1px 0 7px;font-size:20px;color:var(--navy)}
 .listing-status p{margin:0;color:var(--muted);max-width:700px}
@@ -57,7 +65,7 @@ input::placeholder{color:#829197}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#7cae9d}
 footer{border-top:1px solid var(--line);background:#fff;text-align:center;padding:25px 20px 30px;color:var(--muted);font-size:13px}
 footer strong{color:var(--navy)}
-@media(max-width:760px){nav,.wrap,.hero-inner,main{width:min(100% - 28px,1120px)}nav{min-height:68px}.nav-note{display:none}.hero-inner{grid-template-columns:1fr;min-height:0;padding:42px 0 72px}.hero-art{position:absolute;width:210px;right:-20px;bottom:8px;opacity:.25}.hero p{font-size:16px;max-width:490px}.search-panel{padding:17px;border-radius:18px}.searchrow{grid-template-columns:1fr}.search-button{width:100%}.browse-grid{grid-template-columns:repeat(2,1fr);gap:10px}.browse-card{min-height:132px;padding:16px 14px}.section-head{margin-top:32px}.listing-status{padding:20px;grid-template-columns:1fr;gap:12px}}
+@media(max-width:760px){nav,.wrap,.hero-inner,main{width:min(100% - 28px,1120px)}nav{min-height:68px}.nav-note{display:none}.hero-inner{grid-template-columns:1fr;min-height:0;padding:42px 0 72px}.hero-art{position:absolute;width:210px;right:-20px;bottom:8px;opacity:.25}.hero p{font-size:16px;max-width:490px}.search-panel{padding:17px;border-radius:18px}.searchrow{grid-template-columns:1fr}.search-button{width:100%}.browse-grid{grid-template-columns:repeat(2,1fr);gap:10px}.browse-card{min-height:132px;padding:16px 14px}.section-head{margin-top:32px}.listing-status{padding:20px;grid-template-columns:1fr;gap:12px}.price-grid{grid-template-columns:1fr}.price-card{padding:17px}}
 @media(max-width:380px){.brand{font-size:14px}.brandmark{width:38px;height:38px}.hero-inner{padding-top:36px}h1{font-size:37px}.browse-grid{grid-template-columns:1fr 1fr}.browse-card h3{font-size:15px}}
 </style>
 </head>
@@ -127,6 +135,15 @@ footer strong{color:var(--navy)}
 <button class="browse-card" data-browse-type="Pension" type="button"><div class="browse-icon" aria-hidden="true">♡</div><h3>Pensionen</h3><p>Persönlich und gemütlich</p></button>
 <button class="browse-card" data-browse-type="Gasthof" type="button"><div class="browse-icon" aria-hidden="true">♨</div><h3>Gasthöfe</h3><p>Bayerische Gastlichkeit</p></button>
 </div>
+</section>
+<section class="price-guide" aria-labelledby="priceGuideTitle">
+<div class="section-head"><div><h2 id="priceGuideTitle">Preise transparent vergleichen</h2><p>Worauf du bei den Unterkunftskosten achten solltest.</p></div></div>
+<div class="price-grid">
+<article class="price-card"><div class="price-icon" aria-hidden="true">€</div><h3>Preis pro Nacht</h3><div class="price-value">Wird geprüft</div><p>Wenn öffentlich angegeben, zeigen wir den Preis mit Quelle und Datum der Recherche.</p></article>
+<article class="price-card"><div class="price-icon" aria-hidden="true">▦</div><h3>Mindestaufenthalt</h3><div class="price-value">Wird geprüft</div><p>Zum Beispiel Mindestnächte oder abweichende Regeln an Wochenenden und in der Saison.</p></article>
+<article class="price-card"><div class="price-icon" aria-hidden="true">＋</div><h3>Zusatzkosten</h3><div class="price-value">Wird geprüft</div><p>Reinigung, Kurtaxe und weitere Gebühren werden separat ausgewiesen, sofern bekannt.</p></article>
+</div>
+<p class="price-disclaimer">Es werden noch keine konkreten Unterkunftspreise angezeigt. Unbestätigte oder nicht öffentlich verfügbare Preise werden nicht geschätzt.</p>
 </section>
 <section class="listing-status" aria-live="polite">
 <div class="status-icon" aria-hidden="true">✦</div>
