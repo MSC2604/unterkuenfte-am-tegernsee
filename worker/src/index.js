@@ -41,7 +41,7 @@ export default {
         const type = (url.searchParams.get("type") || "").trim().slice(0, 80);
         const arrival = (url.searchParams.get("arrival") || "").trim();
         const departure = (url.searchParams.get("departure") || "").trim();
-        const validDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+        const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
         const hasValidStay = validDate(arrival) && validDate(departure) && departure > arrival;
         const { results } = await env.DB.prepare(
           `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
