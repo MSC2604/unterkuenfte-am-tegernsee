@@ -112,9 +112,9 @@ export default {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               api_key: env.TAVILY_API_KEY,
-              query: query + " Unterkunft Tegernsee Preis Kontakt",
+              query: query + " site:tegernsee.com/gastgeberverzeichnis OR offizielle Gastgeber-Website Unterkunft Ferienwohnung Zimmer Apartments Ferienhaus Preise Kontakt",
               search_depth: "basic",
-              max_results: 5,
+              max_results: 8,
               include_answer: false
             })
           });
@@ -128,7 +128,19 @@ export default {
         try { searchData = await searchResponse.json(); } catch {
           return json({ error: "Der Suchanbieter hat keine lesbare Antwort geliefert." }, 502);
         }
-        const results = Array.isArray(searchData.results) ? searchData.results.slice(0, 5) : [];
+        const seenUrls = new Set();
+        const results = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
+          if (typeof item.url !== "string" || !/^https?:\\/\\//i.test(item.url)) return false;
+          try {
+            const u = new URL(item.url);
+            u.hash = "";
+            for (const key of ["utm_source", "utm_medium", "utm_campaign", "gclid"]) u.searchParams.delete(key);
+            const normalized = u.href.replace(/\\/$/, "").toLowerCase();
+            if (seenUrls.has(normalized)) return false;
+            seenUrls.add(normalized);
+            return true;
+          } catch { return false; }
+        }).slice(0, 8);
         const sources = results
           .filter(item => typeof item.url === "string" && /^https?:\/\//i.test(item.url))
           .map(item => item.url)
@@ -136,7 +148,7 @@ export default {
         const researchResults = results.map(item => ({
           title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
           url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "",
-          content: typeof item.content === "string" ? item.content.slice(0, 2500) : "",
+          content: typeof item.content === "string" ? item.content.slice(0, 1600) : "",
           published_date: typeof item.published_date === "string" ? item.published_date : null
         }));
         const draftId = id();
