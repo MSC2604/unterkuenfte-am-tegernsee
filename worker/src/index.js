@@ -130,12 +130,12 @@ export default {
         }
         const seenUrls = new Set();
         const results = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
-          if (typeof item.url !== "string" || !/^https?:\\/\\//i.test(item.url)) return false;
+          if (typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) return false;
           try {
             const u = new URL(item.url);
             u.hash = "";
             for (const key of ["utm_source", "utm_medium", "utm_campaign", "gclid"]) u.searchParams.delete(key);
-            const normalized = u.href.replace(/\\/$/, "").toLowerCase();
+            const normalized = u.href.replace(/\/$/, "").toLowerCase();
             if (seenUrls.has(normalized)) return false;
             seenUrls.add(normalized);
             return true;
