@@ -95,6 +95,70 @@ export default {
 
     if (path.startsWith("/api/admin/")) {
       if (!adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (request.method === "POST" && path === "/api/admin/research") {
+        if (!env.TAVILY_API_KEY) {
+          return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
+        if (!body || typeof body.query !== "string" || !body.query.trim()) {
+          return json({ error: "Bitte einen Unterkunftsnamen oder eine Website als query angeben." }, 400);
+        }
+        const query = body.query.trim().slice(0, 300);
+        let searchResponse;
+        try {
+          searchResponse = await fetch("https://api.tavily.com/search", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              api_key: env.TAVILY_API_KEY,
+              query: query + " Unterkunft Tegernsee Preis Kontakt",
+              search_depth: "basic",
+              max_results: 5,
+              include_answer: false
+            })
+          });
+        } catch {
+          return json({ error: "Der Suchanbieter ist momentan nicht erreichbar. Es wurde nichts gespeichert." }, 502);
+        }
+        if (!searchResponse.ok) {
+          return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponse.status }, 502);
+        }
+        let searchData;
+        try { searchData = await searchResponse.json(); } catch {
+          return json({ error: "Der Suchanbieter hat keine lesbare Antwort geliefert." }, 502);
+        }
+        const results = Array.isArray(searchData.results) ? searchData.results.slice(0, 5) : [];
+        const sources = results
+          .filter(item => typeof item.url === "string" && /^https?:\/\//i.test(item.url))
+          .map(item => item.url)
+          .slice(0, 5);
+        const researchResults = results.map(item => ({
+          title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
+          url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "",
+          content: typeof item.content === "string" ? item.content.slice(0, 2500) : "",
+          published_date: typeof item.published_date === "string" ? item.published_date : null
+        }));
+        const draftId = id();
+        const payload = {
+          name: query,
+          research_status: results.length ? "results_found_needs_review" : "no_results",
+          researched_at: new Date().toISOString(),
+          prices_verified: false,
+          prices_note: "Suchtreffer sind keine bestätigten Preise oder Verfügbarkeiten. Angaben vor Veröffentlichung auf der Originalquelle prüfen.",
+          research_results: researchResults
+        };
+        await env.DB.prepare(
+          "INSERT INTO research_drafts (id, query, payload_json, source_urls_json, status) VALUES (?, ?, ?, ?, 'pending')"
+        ).bind(draftId, query, JSON.stringify(payload), JSON.stringify(sources)).run();
+        return json({
+          id: draftId,
+          status: "pending",
+          results_found: results.length,
+          sources,
+          message: "Recherche als Entwurf gespeichert. Noch nicht veröffentlicht; Preise und Kontaktdaten müssen anhand der Quellen geprüft werden."
+        }, 201);
+      }
       if (request.method === "GET" && path === "/api/admin/drafts") {
         const { results } = await env.DB.prepare(
           "SELECT id, query, payload_json, source_urls_json, status, researched_at FROM research_drafts WHERE status = 'pending' ORDER BY researched_at DESC"
