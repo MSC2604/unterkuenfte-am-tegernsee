@@ -39,6 +39,10 @@ export default {
         const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
         const town = (url.searchParams.get("town") || "").trim().slice(0, 100);
         const type = (url.searchParams.get("type") || "").trim().slice(0, 80);
+        const arrival = (url.searchParams.get("arrival") || "").trim();
+        const departure = (url.searchParams.get("departure") || "").trim();
+        const validDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+        const hasValidStay = validDate(arrival) && validDate(departure) && departure > arrival;
         const { results } = await env.DB.prepare(
           `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
                   a.website_url, a.contact_email, a.contact_phone, a.booking_url,
@@ -50,6 +54,8 @@ export default {
               AND (? = '' OR lower(coalesce(a.type, '')) = lower(?))
             ORDER BY a.name COLLATE NOCASE`
         ).bind(q, `%${q}%`, `%${q}%`, town, town, type, type).all();
+        // If a valid stay is supplied, retain general offers and offers whose stated dates cover that stay.
+        // This is a date relevance filter, not a guarantee of live availability.
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.valid_from, p.valid_to,
@@ -59,8 +65,23 @@ export default {
              FROM price_offers p
              JOIN accommodations a ON a.id = p.accommodation_id
             WHERE a.published = 1
+              AND (
+                ? = 0
+                OR (
+                  p.arrival_date IS NULL AND p.departure_date IS NULL
+                  AND p.valid_from IS NULL AND p.valid_to IS NULL
+                )
+                OR (
+                  p.arrival_date IS NOT NULL AND p.departure_date IS NOT NULL
+                  AND p.arrival_date = ? AND p.departure_date = ?
+                )
+                OR (
+                  p.valid_from IS NOT NULL AND p.valid_to IS NOT NULL
+                  AND p.valid_from <= ? AND p.valid_to >= ?
+                )
+              )
             ORDER BY p.researched_at DESC`
-        ).all();
+        ).bind(hasValidStay ? 1 : 0, arrival, departure, arrival, departure).all();
         const byAccommodation = new Map();
         for (const offer of offers.results) {
           if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
