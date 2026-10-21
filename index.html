@@ -41,7 +41,7 @@ input::placeholder{color:#829197}
 .section-head h2{font-size:clamp(23px,3vw,30px);line-height:1.2;letter-spacing:-.8px;margin:0;color:var(--navy)}
 .section-head p{margin:6px 0 0;color:var(--muted);font-size:14px}
 .browse-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.browse-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 17px;min-height:142px;box-shadow:0 4px 18px #143b4a06}
+.browse-card{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 17px;min-height:142px;box-shadow:0 4px 18px #143b4a06;font:inherit;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}.browse-card:hover,.browse-card:focus-visible{border-color:#9bcabd;box-shadow:0 8px 24px #143b4a12;transform:translateY(-2px);outline-color:#3c887f}.browse-card.selected{border-color:#7bb6a7;background:#f4faf7}
 .browse-icon{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:#e7f2ee;font-size:22px;margin-bottom:12px}
 .browse-card h3{margin:0;font-size:16px;color:var(--navy)}
 .browse-card p{margin:4px 0 0;font-size:13px;color:var(--muted)}
@@ -108,18 +108,18 @@ footer strong{color:var(--navy)}
 <div><h2 id="browseTitle">Was passt zu dir?</h2><p>Wähle die Unterkunftsart für deinen Aufenthalt.</p></div>
 </div>
 <div class="browse-grid">
-<article class="browse-card"><div class="browse-icon" aria-hidden="true">⌂</div><h3>Ferienwohnungen</h3><p>Flexibel und ganz für dich</p></article>
-<article class="browse-card"><div class="browse-icon" aria-hidden="true">▤</div><h3>Hotels</h3><p>Komfort für deine Auszeit</p></article>
-<article class="browse-card"><div class="browse-icon" aria-hidden="true">♡</div><h3>Pensionen</h3><p>Persönlich und gemütlich</p></article>
-<article class="browse-card"><div class="browse-icon" aria-hidden="true">♨</div><h3>Gasthöfe</h3><p>Bayerische Gastlichkeit</p></article>
+<button class="browse-card" data-browse-type="Ferienwohnung" type="button"><div class="browse-icon" aria-hidden="true">⌂</div><h3>Ferienwohnungen</h3><p>Flexibel und ganz für dich</p></button>
+<button class="browse-card" data-browse-type="Hotel" type="button"><div class="browse-icon" aria-hidden="true">▤</div><h3>Hotels</h3><p>Komfort für deine Auszeit</p></button>
+<button class="browse-card" data-browse-type="Pension" type="button"><div class="browse-icon" aria-hidden="true">♡</div><h3>Pensionen</h3><p>Persönlich und gemütlich</p></button>
+<button class="browse-card" data-browse-type="Gasthof" type="button"><div class="browse-icon" aria-hidden="true">♨</div><h3>Gasthöfe</h3><p>Bayerische Gastlichkeit</p></button>
 </div>
 </section>
 <section class="listing-status" aria-live="polite">
 <div class="status-icon" aria-hidden="true">✦</div>
 <div>
-<h2>Deine nächste Auszeit wartet schon</h2>
-<p>Die Unterkunftsübersicht wird gerade vorbereitet. Sobald die Datenbank eingerichtet ist, erscheinen hier recherchierte Unterkünfte mit den öffentlich angegebenen Preisen und einem direkten Kontakt zum Vermieter. Preise ohne verlässliche öffentliche Angabe werden nicht erfunden.</p>
-<div class="status-note"><span class="status-dot" aria-hidden="true"></span> Übersicht in Vorbereitung</div>
+<h2 id="statusTitle">Deine nächste Auszeit wartet schon</h2>
+<p id="statusText">Die Unterkunftsübersicht wird gerade vorbereitet. Sobald die Datenbank eingerichtet ist, erscheinen hier recherchierte Unterkünfte mit den öffentlich angegebenen Preisen und einem direkten Kontakt zum Vermieter. Preise ohne verlässliche öffentliche Angabe werden nicht erfunden.</p>
+<div class="status-note"><span class="status-dot" aria-hidden="true"></span> Suche und Angebote werden vorbereitet</div>
 </div>
 </section>
 </main>
@@ -128,13 +128,28 @@ footer strong{color:var(--navy)}
 const search=document.querySelector('#search');
 const place=document.querySelector('#place');
 const filters=[...document.querySelectorAll('.filter')];
+const browseCards=[...document.querySelectorAll('[data-browse-type]')];
 let type='Alle';
-filters.forEach(button=>button.addEventListener('click',()=>{
- type=button.dataset.type;
- filters.forEach(item=>item.classList.toggle('active',item===button));
+function setType(nextType){
+ type=nextType;
+ filters.forEach(item=>item.classList.toggle('active',item.dataset.type===type));
+ browseCards.forEach(item=>item.classList.toggle('selected',item.dataset.browseType===type));
+}
+filters.forEach(button=>button.addEventListener('click',()=>setType(button.dataset.type)));
+browseCards.forEach(button=>button.addEventListener('click',()=>{
+ setType(button.dataset.browseType);
+ document.querySelector('.search-panel').scrollIntoView({behavior:'smooth',block:'center'});
 }));
 function showPreparationNotice(){
  const status=document.querySelector('.listing-status');
+ const query=search.value.trim();
+ const selectedPlace=place.value;
+ const parts=[];
+ if(query)parts.push('Suchbegriff: „'+query+'“');
+ if(selectedPlace)parts.push('Ort: '+selectedPlace);
+ if(type!=='Alle')parts.push('Art: '+type);
+ document.querySelector('#statusTitle').textContent=parts.length?'Deine Suche ist vorgemerkt':'Die Unterkunftssuche wird vorbereitet';
+ document.querySelector('#statusText').textContent=(parts.length?'Deine Auswahl ('+parts.join(' · ')+') ist noch nicht mit echten Angeboten verbunden. ':'Die Suche ist noch nicht mit echten Angeboten verbunden. ')+'Sobald die Datenbank und die Suchfunktion eingerichtet sind, können passende Unterkünfte mit verlässlichen Preisangaben angezeigt werden.';
  status.scrollIntoView({behavior:'smooth',block:'center'});
 }
 document.querySelector('#searchButton').addEventListener('click',showPreparationNotice);
