@@ -29,6 +29,7 @@ Nicht den Worker `tegernsee-restaurants-api` und nicht die Datenbank `tegernsee-
 - `GET /api/admin/drafts`: listet offene Entwürfe mit Bearer-Token.
 - `POST /api/admin/drafts`: speichert einen Suchentwurf mit Bearer-Token.
 - `POST /api/admin/research`: sucht über Tavily und speichert maximal fünf Treffer als **ungeprüften Entwurf**; benötigt das Worker-Secret `TAVILY_API_KEY` und den `ADMIN_TOKEN`.
+- `POST /api/admin/drafts/:id/update`: speichert bearbeitete Angaben in einem offenen Entwurf, ohne ihn zu veröffentlichen.
 - `POST /api/admin/drafts/:id/approve`: veröffentlicht einen geprüften Entwurf.
 - `POST /api/admin/drafts/:id/reject`: verwirft einen Entwurf.
 
@@ -37,7 +38,7 @@ Der Endpunkt `POST /api/admin/research` ist vorbereitet. Er ruft die Tavily-Such
 
 Zum späteren Aktivieren im Cloudflare-Worker die Secrets `ADMIN_TOKEN` und `TAVILY_API_KEY` hinterlegen. Tavily listet aktuell einen kostenlosen Tarif mit 1.000 API-Credits pro Monat ohne Kreditkarte; das Kontingent ist begrenzt. Vor dem Einrichten bitte den aktuellen Tarif direkt prüfen: https://www.tavily.com/pricing. Keine kostenpflichtige Stufe aktivieren. Wenn Credits aufgebraucht sind, soll die Suche ausfallen statt automatisch auf einen bezahlten Tarif zu wechseln.
 
-**Noch nicht fertig:** Die Datenbank/Worker-Verbindung wurde noch nicht getestet und es gibt noch keine Admin-Oberfläche zum komfortablen Prüfen, Bearbeiten und Freigeben der Recherche-Entwürfe. Die Recherche kann daher noch nicht als vollständig nutzbare Funktion gelten.
+**Prüfoberfläche:** Im Repository gibt es jetzt `admin.html` für das Laden, Bearbeiten, Speichern, Ablehnen und Freigeben offener Entwürfe. Die Seite erwartet die tatsächliche Worker-Adresse und das Admin-Token als Eingabe; das Token wird nicht in die Datei geschrieben. Die Oberfläche und die API sind noch nicht live getestet. Die Datenbank/Worker-Verbindung ist ebenfalls noch unbestätigt. Daher ist die Recherche noch nicht als vollständig nutzbare Funktion anzusehen.
 
 Preise dürfen nur mit nachvollziehbarer Quelle gespeichert werden. Nicht auffindbare Preise müssen als „Preis auf Anfrage“ markiert werden; keine Preise erfinden. Suchergebnisse dürfen nicht ohne Prüfung automatisch veröffentlicht werden.
 
