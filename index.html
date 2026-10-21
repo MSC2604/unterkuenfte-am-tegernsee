@@ -30,7 +30,7 @@ h1{font-size:clamp(38px,5.3vw,62px);line-height:1.03;letter-spacing:-2.2px;margi
 main{width:min(1120px,100% - 40px);margin:-38px auto 0;position:relative;padding-bottom:56px}
 .search-panel{background:#fff;border:1px solid #e5ece8;border-radius:22px;padding:24px;box-shadow:0 16px 42px #123d4a16}
 .search-title{margin:0 0 15px;font-size:19px;letter-spacing:-.3px}
-.searchrow{display:grid;grid-template-columns:1fr 220px auto;gap:10px}
+.searchrow{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(145px,1fr) minmax(145px,1fr) 170px auto;gap:10px}
 input,select{font:inherit;border:1px solid #d8e3df;border-radius:12px;padding:13px 14px;background:#fff;color:var(--ink);width:100%;min-width:0;outline-color:#3c887f}
 input::placeholder{color:#829197}
 .search-button{border:0;border-radius:12px;padding:13px 20px;background:var(--navy);color:#fff;font:inherit;font-weight:700;white-space:nowrap}
@@ -121,6 +121,11 @@ footer strong{color:var(--navy)}
 <select id="place" aria-label="Ort auswählen">
 <option value="">Alle Orte</option><option>Tegernsee</option><option>Gmund</option><option>Rottach-Egern</option><option>Kreuth</option><option>Bad Wiessee</option><option>Schliersee</option>
 </select>
+<input id="arrival" type="date" aria-label="Anreise" title="Anreise">
+<input id="departure" type="date" aria-label="Abreise" title="Abreise">
+<select id="guests" aria-label="Anzahl der Gäste">
+<option value="">Gäste</option><option value="1">1 Gast</option><option value="2">2 Gäste</option><option value="3">3 Gäste</option><option value="4">4 Gäste</option><option value="5">5 Gäste</option><option value="6+">6 oder mehr</option>
+</select>
 <button class="search-button" id="searchButton" type="button">Unterkünfte suchen</button>
 </div>
 <div class="filters" aria-label="Unterkunftsart auswählen">
@@ -189,6 +194,9 @@ footer strong{color:var(--navy)}
 <script>
 const search=document.querySelector('#search');
 const place=document.querySelector('#place');
+const arrival=document.querySelector('#arrival');
+const departure=document.querySelector('#departure');
+const guests=document.querySelector('#guests');
 const filters=[...document.querySelectorAll('.filter')];
 const browseCards=[...document.querySelectorAll('[data-browse-type]')];
 const placeChips=[...document.querySelectorAll('[data-place]')];
@@ -214,10 +222,16 @@ function showPreparationNotice(){
  const status=document.querySelector('.listing-status');
  const query=search.value.trim();
  const selectedPlace=place.value;
+ const arrivalDate=arrival.value;
+ const departureDate=departure.value;
+ const guestCount=guests.value;
  const parts=[];
  if(query)parts.push('Suchbegriff: „'+query+'“');
  if(selectedPlace)parts.push('Ort: '+selectedPlace);
  if(type!=='Alle')parts.push('Art: '+type);
+ if(arrivalDate)parts.push('Anreise: '+arrivalDate);
+ if(departureDate)parts.push('Abreise: '+departureDate);
+ if(guestCount)parts.push('Gäste: '+guestCount);
  document.querySelector('#statusTitle').textContent=parts.length?'Deine Suche ist vorgemerkt':'Die Unterkunftssuche wird vorbereitet';
  document.querySelector('#statusText').textContent=(parts.length?'Deine Auswahl ('+parts.join(' · ')+') ist noch nicht mit echten Angeboten verbunden. ':'Die Suche ist noch nicht mit echten Angeboten verbunden. ')+'Sobald die Datenbank und die Suchfunktion eingerichtet sind, können passende Unterkünfte mit verlässlichen Preisangaben angezeigt werden.';
  status.scrollIntoView({behavior:'smooth',block:'center'});
