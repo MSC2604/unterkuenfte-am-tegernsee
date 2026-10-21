@@ -128,6 +128,7 @@ footer strong{color:var(--navy)}
 <option value="">Gäste</option><option value="1">1 Gast</option><option value="2">2 Gäste</option><option value="3">3 Gäste</option><option value="4">4 Gäste</option><option value="5">5 Gäste</option><option value="6+">6 oder mehr</option>
 </select>
 <button class="search-button" id="searchButton" type="button">Unterkünfte suchen</button>
+<button class="search-button" id="resetButton" type="button" style="background:#eef5f2;color:#244d40;border:1px solid #d4e3dc">Auswahl zurücksetzen</button>
 </div>
 <div class="filters" aria-label="Unterkunftsart auswählen">
 <button class="filter active" data-type="Alle" type="button">Alle Unterkünfte</button>
@@ -228,6 +229,19 @@ function syncDateLimits(){
 arrival.addEventListener('change',syncDateLimits);
 departure.addEventListener('change',syncDateLimits);
 syncDateLimits();
+function resetSearch(){
+ search.value='';
+ place.value='';
+ arrival.value='';
+ departure.value='';
+ guests.value='';
+ setPlace('');
+ setType('Alle');
+ syncDateLimits();
+ document.querySelector('#statusTitle').textContent='Deine nächste Auszeit wartet schon';
+ document.querySelector('#statusText').textContent='Die Unterkunftsübersicht wird gerade vorbereitet. Sobald die Datenbank eingerichtet ist, erscheinen hier recherchierte Unterkünfte mit öffentlich angegebenen Preisen und direktem Kontakt zum Vermieter. Preise ohne verlässliche öffentliche Angabe werden nicht erfunden.';
+}
+document.querySelector('#resetButton').addEventListener('click',resetSearch);
 function showPreparationNotice(){
  syncDateLimits();
  if(!arrival.reportValidity()||!departure.reportValidity())return;
@@ -249,7 +263,7 @@ function showPreparationNotice(){
  if(arrivalDate)parts.push('Anreise: '+arrivalDate);
  if(departureDate)parts.push('Abreise: '+departureDate);
  if(guestCount)parts.push('Gäste: '+guestCount);
- document.querySelector('#statusTitle').textContent=parts.length?'Deine Suche ist vorgemerkt':'Die Unterkunftssuche wird vorbereitet';
+ document.querySelector('#statusTitle').textContent=parts.length?'Deine Suchauswahl':'Die Unterkunftssuche wird vorbereitet';
  document.querySelector('#statusText').textContent=(parts.length?'Deine Auswahl ('+parts.join(' · ')+') ist noch nicht mit echten Angeboten verbunden. ':'Die Suche ist noch nicht mit echten Angeboten verbunden. ')+'Sobald die Datenbank und die Suchfunktion eingerichtet sind, können passende Unterkünfte mit verlässlichen Preisangaben angezeigt werden.';
  status.scrollIntoView({behavior:'smooth',block:'center'});
 }
