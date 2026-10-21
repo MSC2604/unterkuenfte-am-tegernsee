@@ -58,6 +58,22 @@ input::placeholder{color:#829197}
 .price-value{font-size:20px;font-weight:800;color:#326d63;letter-spacing:-.4px}
 .price-card p{font-size:13px;color:var(--muted);margin:7px 0 0}
 .price-disclaimer{font-size:13px;color:var(--muted);margin:12px 2px 0}
+.listing-preview{margin-top:30px}
+.preview-card{display:grid;grid-template-columns:150px minmax(0,1fr);gap:18px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+.preview-art{min-height:170px;border-radius:14px;background:linear-gradient(145deg,#e5f1eb,#b9d8ce);display:grid;place-items:center;color:#2e6e67;font-size:44px}
+.preview-body{min-width:0}
+.preview-top{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.preview-top h3{margin:0;color:var(--navy);font-size:20px}
+.preview-tag{font-size:11px;font-weight:750;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:5px 8px;background:#f5f1e5;color:#79683b;white-space:nowrap}
+.preview-location{margin:5px 0 12px;color:var(--muted);font-size:14px}
+.preview-price{font-size:22px;font-weight:800;color:#326d63}
+.preview-price small{font-size:13px;font-weight:500;color:var(--muted)}
+.preview-details{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0;color:#50666c;font-size:13px}
+.preview-details span{display:inline-flex;align-items:center;gap:6px}
+.preview-source{font-size:12px;color:var(--muted);border-top:1px solid #edf1ef;padding-top:10px;margin-top:12px}
+.preview-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+.preview-action{display:inline-block;text-decoration:none;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;border:1px solid #d7e3de;color:var(--navy);background:#fff}
+.preview-action.primary{background:var(--navy);border-color:var(--navy);color:#fff}
 .status-icon{width:52px;height:52px;border-radius:17px;background:#f4f1e7;display:grid;place-items:center;font-size:25px}
 .listing-status h2{margin:1px 0 7px;font-size:20px;color:var(--navy)}
 .listing-status p{margin:0;color:var(--muted);max-width:700px}
@@ -65,7 +81,7 @@ input::placeholder{color:#829197}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#7cae9d}
 footer{border-top:1px solid var(--line);background:#fff;text-align:center;padding:25px 20px 30px;color:var(--muted);font-size:13px}
 footer strong{color:var(--navy)}
-@media(max-width:760px){nav,.wrap,.hero-inner,main{width:min(100% - 28px,1120px)}nav{min-height:68px}.nav-note{display:none}.hero-inner{grid-template-columns:1fr;min-height:0;padding:42px 0 72px}.hero-art{position:absolute;width:210px;right:-20px;bottom:8px;opacity:.25}.hero p{font-size:16px;max-width:490px}.search-panel{padding:17px;border-radius:18px}.searchrow{grid-template-columns:1fr}.search-button{width:100%}.browse-grid{grid-template-columns:repeat(2,1fr);gap:10px}.browse-card{min-height:132px;padding:16px 14px}.section-head{margin-top:32px}.listing-status{padding:20px;grid-template-columns:1fr;gap:12px}.price-grid{grid-template-columns:1fr}.price-card{padding:17px}}
+@media(max-width:760px){nav,.wrap,.hero-inner,main{width:min(100% - 28px,1120px)}nav{min-height:68px}.nav-note{display:none}.hero-inner{grid-template-columns:1fr;min-height:0;padding:42px 0 72px}.hero-art{position:absolute;width:210px;right:-20px;bottom:8px;opacity:.25}.hero p{font-size:16px;max-width:490px}.search-panel{padding:17px;border-radius:18px}.searchrow{grid-template-columns:1fr}.search-button{width:100%}.browse-grid{grid-template-columns:repeat(2,1fr);gap:10px}.browse-card{min-height:132px;padding:16px 14px}.section-head{margin-top:32px}.listing-status{padding:20px;grid-template-columns:1fr;gap:12px}.price-grid{grid-template-columns:1fr}.price-card{padding:17px}.preview-card{grid-template-columns:1fr;padding:14px}.preview-art{min-height:120px}.preview-top h3{font-size:18px}}
 @media(max-width:380px){.brand{font-size:14px}.brandmark{width:38px;height:38px}.hero-inner{padding-top:36px}h1{font-size:37px}.browse-grid{grid-template-columns:1fr 1fr}.browse-card h3{font-size:15px}}
 </style>
 </head>
@@ -144,6 +160,21 @@ footer strong{color:var(--navy)}
 <article class="price-card"><div class="price-icon" aria-hidden="true">＋</div><h3>Zusatzkosten</h3><div class="price-value">Wird geprüft</div><p>Reinigung, Kurtaxe und weitere Gebühren werden separat ausgewiesen, sofern bekannt.</p></article>
 </div>
 <p class="price-disclaimer">Es werden noch keine konkreten Unterkunftspreise angezeigt. Unbestätigte oder nicht öffentlich verfügbare Preise werden nicht geschätzt.</p>
+</section>
+<section class="listing-preview" aria-labelledby="previewTitle">
+<div class="section-head"><div><h2 id="previewTitle">So wird ein Unterkunftsangebot aussehen</h2><p>Eine Vorschau der späteren Darstellung – noch kein echtes Inserat.</p></div></div>
+<article class="preview-card">
+<div class="preview-art" aria-hidden="true">⌂</div>
+<div class="preview-body">
+<div class="preview-top"><h3>Beispiel-Unterkunft</h3><span class="preview-tag">Layout-Vorschau</span></div>
+<p class="preview-location">Ort und vollständige Adresse werden hier angezeigt</p>
+<div class="preview-price">Preis auf Anfrage <small>· noch nicht recherchiert</small></div>
+<div class="preview-details"><span>▦ Mindestaufenthalt: wird geprüft</span><span>＋ Zusatzkosten: werden geprüft</span></div>
+<p class="preview-source">Quelle: noch nicht hinterlegt · Recherchedatum: noch nicht vorhanden</p>
+<div class="preview-actions"><a class="preview-action primary" href="#statusText">Kontakt zum Vermieter – später verfügbar</a><a class="preview-action" href="#priceGuideTitle">Preisdetails ansehen</a></div>
+</div>
+</article>
+<p class="price-disclaimer">Diese Karte ist nur ein Gestaltungsmuster. Es handelt sich nicht um eine echte Unterkunft; es gibt keinen tatsächlichen Vermieter-Kontakt und keine bestätigten Preise.</p>
 </section>
 <section class="listing-status" aria-live="polite">
 <div class="status-icon" aria-hidden="true">✦</div>
