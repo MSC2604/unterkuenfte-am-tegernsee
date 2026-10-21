@@ -23,7 +23,8 @@ Nicht den Worker `tegernsee-restaurants-api` und nicht die Datenbank `tegernsee-
 ## Vorhandene API-Funktionen
 - `GET /api/health`: prüft die Datenbankverbindung.
 - `GET /api/accommodations`: liefert nur veröffentlichte Unterkünfte samt Preisangeboten.
-- Optionale Filter: `q`, `town`, `type`.
+- Optionale Filter: `q`, `town`, `type`, `arrival` und `departure` (Datumsformat `YYYY-MM-DD`).
+- Bei gültigem Reisezeitraum werden datumsbezogene Preisangebote gefiltert; allgemeine Angebote ohne Datumsbindung bleiben sichtbar. Das bestätigt keine aktuelle Verfügbarkeit.
 - `GET /api/admin/drafts`: listet offene Entwürfe mit Bearer-Token.
 - `POST /api/admin/drafts`: speichert einen Suchentwurf mit Bearer-Token.
 - `POST /api/admin/drafts/:id/approve`: veröffentlicht einen geprüften Entwurf.
