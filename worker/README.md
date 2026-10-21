@@ -28,11 +28,16 @@ Nicht den Worker `tegernsee-restaurants-api` und nicht die Datenbank `tegernsee-
 - Bei gültigem Reisezeitraum werden datumsbezogene Preisangebote gefiltert; allgemeine Angebote ohne Datumsbindung bleiben sichtbar. Das bestätigt keine aktuelle Verfügbarkeit.
 - `GET /api/admin/drafts`: listet offene Entwürfe mit Bearer-Token.
 - `POST /api/admin/drafts`: speichert einen Suchentwurf mit Bearer-Token.
+- `POST /api/admin/research`: sucht über Tavily und speichert maximal fünf Treffer als **ungeprüften Entwurf**; benötigt das Worker-Secret `TAVILY_API_KEY` und den `ADMIN_TOKEN`.
 - `POST /api/admin/drafts/:id/approve`: veröffentlicht einen geprüften Entwurf.
 - `POST /api/admin/drafts/:id/reject`: verwirft einen Entwurf.
 
-## Was noch nicht fertig ist
-Die automatische Websuche ist **noch nicht integriert**. Es gibt noch keine fertige Admin-Oberfläche für die gefundenen Daten. Der nächste Entwicklungsschritt nach erfolgreichem Datenbanktest ist eine Suche mit öffentlich verfügbaren Quellen, die Ergebnisse als Entwurf speichert und vor der Freigabe prüfbar macht.
+## Recherche über Tavily vorbereiten
+Der Endpunkt `POST /api/admin/research` ist vorbereitet. Er ruft die Tavily-Suche auf und speichert bis zu fünf Treffer samt URL und kurzem Auszug als offenen Entwurf. Er veröffentlicht nichts automatisch und behandelt Treffer ausdrücklich nicht als bestätigte Preise.
+
+Zum späteren Aktivieren im Cloudflare-Worker die Secrets `ADMIN_TOKEN` und `TAVILY_API_KEY` hinterlegen. Tavily listet aktuell einen kostenlosen Tarif mit 1.000 API-Credits pro Monat ohne Kreditkarte; das Kontingent ist begrenzt. Vor dem Einrichten bitte den aktuellen Tarif direkt prüfen: https://www.tavily.com/pricing. Keine kostenpflichtige Stufe aktivieren. Wenn Credits aufgebraucht sind, soll die Suche ausfallen statt automatisch auf einen bezahlten Tarif zu wechseln.
+
+**Noch nicht fertig:** Die Datenbank/Worker-Verbindung wurde noch nicht getestet und es gibt noch keine Admin-Oberfläche zum komfortablen Prüfen, Bearbeiten und Freigeben der Recherche-Entwürfe. Die Recherche kann daher noch nicht als vollständig nutzbare Funktion gelten.
 
 Preise dürfen nur mit nachvollziehbarer Quelle gespeichert werden. Nicht auffindbare Preise müssen als „Preis auf Anfrage“ markiert werden; keine Preise erfinden. Suchergebnisse dürfen nicht ohne Prüfung automatisch veröffentlicht werden.
 
