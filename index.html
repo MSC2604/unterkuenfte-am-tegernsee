@@ -30,7 +30,7 @@ h1{font-size:clamp(38px,5.3vw,62px);line-height:1.03;letter-spacing:-2.2px;margi
 main{width:min(1120px,100% - 40px);margin:-38px auto 0;position:relative;padding-bottom:56px}
 .search-panel{background:#fff;border:1px solid #e5ece8;border-radius:22px;padding:24px;box-shadow:0 16px 42px #123d4a16}
 .search-title{margin:0 0 15px;font-size:19px;letter-spacing:-.3px}
-.searchrow{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(145px,1fr) minmax(145px,1fr) 170px auto;gap:10px}
+.searchrow{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) 150px auto;gap:10px}
 input,select{font:inherit;border:1px solid #d8e3df;border-radius:12px;padding:13px 14px;background:#fff;color:var(--ink);width:100%;min-width:0;outline-color:#3c887f}
 input::placeholder{color:#829197}
 .search-button{border:0;border-radius:12px;padding:13px 20px;background:var(--navy);color:#fff;font:inherit;font-weight:700;white-space:nowrap}
@@ -81,6 +81,7 @@ input::placeholder{color:#829197}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#7cae9d}
 footer{border-top:1px solid var(--line);background:#fff;text-align:center;padding:25px 20px 30px;color:var(--muted);font-size:13px}
 footer strong{color:var(--navy)}
+@media(min-width:761px) and (max-width:1050px){.searchrow{grid-template-columns:repeat(3,minmax(0,1fr))}.searchrow input:first-child{grid-column:span 2}.search-button{width:100%}}
 @media(max-width:760px){nav,.wrap,.hero-inner,main{width:min(100% - 28px,1120px)}nav{min-height:68px}.nav-note{display:none}.hero-inner{grid-template-columns:1fr;min-height:0;padding:42px 0 72px}.hero-art{position:absolute;width:210px;right:-20px;bottom:8px;opacity:.25}.hero p{font-size:16px;max-width:490px}.search-panel{padding:17px;border-radius:18px}.searchrow{grid-template-columns:1fr}.search-button{width:100%}.browse-grid{grid-template-columns:repeat(2,1fr);gap:10px}.browse-card{min-height:132px;padding:16px 14px}.section-head{margin-top:32px}.listing-status{padding:20px;grid-template-columns:1fr;gap:12px}.price-grid{grid-template-columns:1fr}.price-card{padding:17px}.preview-card{grid-template-columns:1fr;padding:14px}.preview-art{min-height:120px}.preview-top h3{font-size:18px}}
 @media(max-width:380px){.brand{font-size:14px}.brandmark{width:38px;height:38px}.hero-inner{padding-top:36px}h1{font-size:37px}.browse-grid{grid-template-columns:1fr 1fr}.browse-card h3{font-size:15px}}
 </style>
