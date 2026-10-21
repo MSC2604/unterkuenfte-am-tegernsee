@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unterkünfte – Recherche prüfen</title>
+<style>
+:root{color-scheme:light;--green:#2d6a56;--pale:#eef5f1;--ink:#20342c;--line:#d9e4de}
+*{box-sizing:border-box}body{margin:0;background:#f5f7f5;color:var(--ink);font:16px/1.5 system-ui,-apple-system,sans-serif}
+header{background:var(--green);color:white;padding:22px max(18px,calc((100% - 980px)/2))}
+main{max-width:980px;margin:22px auto;padding:0 14px}.panel,.draft{background:white;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+h1{font-size:1.35rem;margin:0}h2{font-size:1.1rem;margin:0 0 12px}p{margin:.4em 0}.muted{color:#5b6d64;font-size:.92rem}
+label{display:block;font-weight:650;font-size:.92rem;margin:10px 0 4px}input,textarea,select{width:100%;padding:11px;border:1px solid #b9c9c0;border-radius:8px;font:inherit;background:white;color:inherit}
+textarea{min-height:82px;resize:vertical}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}.wide{grid-column:1/-1}
+button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:650;cursor:pointer;margin:8px 8px 0 0;background:var(--green);color:white}
+button.secondary{background:var(--pale);color:var(--green);border:1px solid var(--line)}button.danger{background:#8a3434}
+.status{padding:10px 12px;border-radius:8px;background:var(--pale);margin:10px 0;white-space:pre-wrap}.result{border-top:1px solid var(--line);padding:12px 0}.result a{color:var(--green);font-weight:700;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:20px;background:var(--pale);padding:3px 9px;font-size:.82rem}.hidden{display:none}
+@media(max-width:620px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}header{padding:18px}}
+</style>
+</head>
+<body>
+<header><h1>Unterkünfte am Tegernsee – Recherche prüfen</h1><p>Private Prüfoberfläche · Entwürfe werden erst nach deiner Freigabe veröffentlicht.</p></header>
+<main>
+<section class="panel">
+<h2>1. Verbindung</h2>
+<p class="muted">Trage die Worker-Adresse und dein Admin-Token ein. Das Token wird nur während dieser geöffneten Seite verwendet und nicht gespeichert.</p>
+<label for="api">Worker-Adresse</label><input id="api" value="https://unterkuenfte-am-tegernsee-api.DEIN-ACCOUNT.workers.dev" autocomplete="url">
+<label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN">
+<button id="connect">Entwürfe laden</button><button id="newSearch" class="secondary">Neue Webrecherche</button>
+<div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
+<div id="searchBox" class="hidden"><label for="query">Name der Unterkunft oder Website</label><input id="query" placeholder="z. B. Ferienwohnung am Tegernsee"><button id="runSearch">Recherche starten</button><p class="muted">Die Suche kann Suchtreffer liefern, aber bestätigt weder Preise noch Verfügbarkeit.</p></div>
+</section>
+<section id="drafts"></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let drafts=[], selected=null;
+function base(){return $('api').value.trim().replace(/\/+$/,'')}
+function headers(){return {'Authorization':'Bearer '+$('token').value.trim(),'Content-Type':'application/json'}}
+function status(s){$('status').textContent=s}
+async function api(path,opts={}){const r=await fetch(base()+path,{...opts,headers:{...headers(),...(opts.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function parse(d){try{return typeof d.payload_json==='string'?JSON.parse(d.payload_json):(d.payload||{})}catch{return {}}}
+async function load(){try{const d=await api('/api/admin/drafts');drafts=d.drafts||[];status(drafts.length+' offene Entwürfe geladen.');render()}catch(e){status('Fehler: '+e.message+'\nPrüfe Worker-Adresse, Token sowie ob Worker und Datenbank eingerichtet sind.')} }
+function render(){const root=$('drafts');root.innerHTML='';if(!drafts.length){root.innerHTML='<section class="panel"><p>Keine offenen Entwürfe vorhanden.</p></section>';return}
+drafts.forEach(d=>{const p=parse(d),card=document.createElement('section');card.className='draft';card.innerHTML='<h2>'+esc(d.query||p.name||'Entwurf')+'</h2><p class="muted">Recherche: '+esc(d.researched_at||p.researched_at||'Zeitpunkt unbekannt')+'</p><div class="results"></div><div class="grid">'+field('name','Unterkunftsname',p.name,'text')+field('town','Ort',p.town,'text')+field('address','Adresse',p.address,'text')+field('type','Art der Unterkunft',p.type,'text')+field('contact_email','E-Mail',p.contact_email,'email')+field('contact_phone','Telefon',p.contact_phone,'text')+field('website_url','Website',p.website_url,'url')+field('booking_url','Kontakt-/Buchungsseite',p.booking_url,'url')+field('description','Beschreibung und Hinweise',p.description,'textarea',true)+'</div><p class="muted">Preis: '+(p.prices_verified?'als geprüft markiert':'nicht bestätigt')+'. Keine Preise aus Suchauszügen übernehmen, ohne die Originalquelle zu prüfen.</p><button class="save">Entwurf speichern</button><button class="approve">Freigeben & veröffentlichen</button><button class="reject danger">Ablehnen</button><div class="status feedback">Bitte Angaben prüfen. Noch nicht veröffentlicht.</div>';card.dataset.id=d.id;card.dataset.payload=JSON.stringify(p);
+const res=card.querySelector('.results');const arr=Array.isArray(p.research_results)?p.research_results:[];if(!arr.length)res.innerHTML='<p class="muted">Keine Suchtreffer im Entwurf enthalten.</p>';else res.innerHTML=arr.map(x=>'<div class="result"><a href="'+esc(safeUrl(x.url))+'" target="_blank" rel="noopener noreferrer">'+esc(x.title||x.url||'Quelle öffnen')+'</a><p>'+esc(x.content||'Kein Textauszug vorhanden.')+'</p><p class="muted">'+esc(x.published_date||'')+'</p></div>').join('');
+card.querySelector('.save').onclick=()=>save(card,false);card.querySelector('.approve').onclick=()=>save(card,true);card.querySelector('.reject').onclick=()=>reject(card);root.appendChild(card)})}
+function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
+function field(key,label,value,type,wide=false){return '<div class="'+(wide?'wide':'')+'"><label>'+label+'</label>'+(type==='textarea'?'<textarea data-key="'+key+'">'+esc(value||'')+'</textarea>':'<input data-key="'+key+'" type="'+type+'" value="'+esc(value||'')+'">')+'</div>'}
+function readPayload(card){const p=JSON.parse(card.dataset.payload||'{}');card.querySelectorAll('[data-key]').forEach(el=>p[el.dataset.key]=el.value.trim());return p}
+async function save(card,approve){const feedback=card.querySelector('.feedback');try{const p=readPayload(card);if(!p.name){feedback.textContent='Bitte zuerst den Unterkunftsnamen eintragen.';return}if(approve&&!confirm('Diesen Eintrag jetzt veröffentlichen? Bitte Quellen und Angaben vorher prüfen.'))return;await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/update',{method:'POST',body:JSON.stringify({payload:p})});if(approve){await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/approve',{method:'POST',body:'{}'});feedback.textContent='Freigegeben. Eintrag wurde veröffentlicht.';await load()}else{card.dataset.payload=JSON.stringify(p);feedback.textContent='Entwurf gespeichert. Noch nicht veröffentlicht.'}}catch(e){feedback.textContent='Fehler: '+e.message}}
+async function reject(card){if(!confirm('Diesen Entwurf wirklich ablehnen?'))return;try{await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/reject',{method:'POST',body:'{}'});status('Entwurf abgelehnt.');await load()}catch(e){card.querySelector('.feedback').textContent='Fehler: '+e.message}}
+$('connect').onclick=load;$('newSearch').onclick=()=>$('searchBox').classList.toggle('hidden');$('runSearch').onclick=async()=>{const query=$('query').value.trim();if(!query){status('Bitte einen Namen oder eine Website eingeben.');return}try{status('Recherche läuft …');const d=await api('/api/admin/research',{method:'POST',body:JSON.stringify({query})});status(d.message||'Recherche gespeichert.');$('query').value='';await load()}catch(e){status('Recherche fehlgeschlagen: '+e.message)}};
+</script>
+</body></html>
