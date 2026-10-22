@@ -18,6 +18,12 @@ function adminAuthorized(request, env) {
 function id() {
   return crypto.randomUUID();
 }
+async function ensureAccommodationImageTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accommodation_images (accommodation_id TEXT PRIMARY KEY, image_data TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+}
+function safeAccommodationImage(value) {
+  return typeof value === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(value) && value.length <= 260000 ? value : "";
+}
 async function ensureGalleryTable(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS price_offer_galleries (
     price_offer_id TEXT PRIMARY KEY,
@@ -56,11 +62,13 @@ export default {
         const departure = (url.searchParams.get("departure") || "").trim();
         const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
         const hasValidStay = validDate(arrival) && validDate(departure) && departure > arrival;
+        await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
           `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
                   a.website_url, a.contact_email, a.contact_phone, a.booking_url,
-                  a.updated_at
+                  a.updated_at, ai.image_data AS image_url
              FROM accommodations a
+             LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id
             WHERE a.published = 1
               AND (? = '' OR lower(a.name) LIKE lower(?) OR lower(coalesce(a.description, '')) LIKE lower(?))
               AND (? = '' OR lower(coalesce(a.town, '')) = lower(?))
@@ -215,8 +223,9 @@ export default {
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         await ensureGalleryTable(env);
+        await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
-          "SELECT id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url FROM accommodations WHERE published = 1 ORDER BY name COLLATE NOCASE"
+          "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
         ).all();
         const { results: offers } = await env.DB.prepare(
           "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name FROM price_offers ORDER BY researched_at DESC"
@@ -246,11 +255,17 @@ export default {
         ).bind(accommodationId).first();
         if (!existing) return json({ error: "Veröffentlichte Unterkunft nicht gefunden." }, 404);
         const str = key => typeof p[key] === "string" ? p[key].trim().slice(0, key === "description" ? 5000 : 3000) || null : null;
+        await ensureAccommodationImageTable(env);
         const batch = [
           env.DB.prepare(
             "UPDATE accommodations SET name = ?, town = ?, address = ?, type = ?, description = ?, website_url = ?, contact_email = ?, contact_phone = ?, booking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND published = 1"
           ).bind(p.name.trim().slice(0, 300), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), accommodationId)
         ];
+        if (typeof p.image_url === "string") {
+          const image = safeAccommodationImage(p.image_url);
+          if (image) batch.push(env.DB.prepare("INSERT INTO accommodation_images (accommodation_id, image_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(accommodation_id) DO UPDATE SET image_data = excluded.image_data, updated_at = CURRENT_TIMESTAMP").bind(accommodationId, image));
+          else batch.push(env.DB.prepare("DELETE FROM accommodation_images WHERE accommodation_id = ?").bind(accommodationId));
+        }
         const existingOffers = await env.DB.prepare(
           "SELECT id, source_url, source_name FROM price_offers WHERE accommodation_id = ?"
         ).bind(accommodationId).all();
@@ -383,12 +398,15 @@ export default {
         const accommodationId = id();
         const fields = ["town", "address", "type", "description", "website_url", "contact_email", "contact_phone", "booking_url"];
         const values = fields.map(key => typeof payload[key] === "string" ? payload[key].slice(0, 3000) : null);
+        await ensureAccommodationImageTable(env);
         const batch = [
           env.DB.prepare(
             `INSERT INTO accommodations (id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url, published)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
           ).bind(accommodationId, payload.name.slice(0, 300), ...values)
         ];
+        const accommodationImage = safeAccommodationImage(payload.image_url);
+        if (accommodationImage) batch.push(env.DB.prepare("INSERT INTO accommodation_images (accommodation_id, image_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)").bind(accommodationId, accommodationImage));
         const prices = Array.isArray(payload.prices) ? payload.prices.slice(0, 30) : [];
         for (const price of prices) {
           const sourceUrl = typeof price.source_url === "string" ? price.source_url : null;
