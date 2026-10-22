@@ -1,3 +1,4 @@
+// Deployment trigger: no application logic or data changes.
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
