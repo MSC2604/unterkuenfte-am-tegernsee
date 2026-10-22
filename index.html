@@ -176,7 +176,18 @@ footer strong{color:var(--navy)}
 .result-card.expanded .result-details{display:block}
 .result-details h4{margin:12px 0 6px;color:#244a79;font-size:14px}
 .result-details .result-unit{margin:0;padding:10px 0;border-top:1px solid #edf1f6}
-.result-details .result-unit-row{display:flex;justify-content:space-between;gap:10px;align-items:start}
+.result-details .result-unit-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(100px,.9fr);gap:12px;align-items:center}
+.unit-gallery{min-width:0}
+.unit-gallery-images{width:100%;aspect-ratio:4/3;background:#e8eff8;border-radius:12px;overflow:hidden}
+.unit-gallery-images img{width:100%;height:100%;object-fit:cover;display:block}
+.unit-gallery-images img[hidden]{display:none}
+.unit-gallery-placeholder{width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;border-radius:12px;background:linear-gradient(145deg,#dce7f4,#f6f8fb);color:#526985;font-size:12px;text-align:center;padding:8px}
+.gallery-controls{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:5px;font-size:11px;color:#6d7887}
+.gallery-step{border:1px solid #d4deeb;background:#fff;color:#244a79;border-radius:8px;padding:3px 8px;font:inherit;cursor:pointer}
+.unit-price-block{display:flex;flex-direction:column;align-items:flex-end;gap:8px;text-align:right;min-width:0}
+.unit-price-block .unit-title{font-size:13px;color:#203149;overflow-wrap:anywhere}
+.unit-price-block .result-price{font-size:14px;white-space:nowrap;padding:6px 8px}
+@media(max-width:380px){.result-details .result-unit-row{grid-template-columns:minmax(0,1fr) minmax(95px,.85fr);gap:8px}.unit-price-block .result-price{font-size:12px;padding:5px 6px}}
 .result-details .result-unit-row strong{font-size:13px}
 .result-details .result-note,.result-details small{font-size:12px;color:#6d7887;line-height:1.5}
 .result-details p{margin:6px 0}
@@ -385,7 +396,7 @@ function resetSearch(){
  document.querySelector('#statusText').textContent='Die Unterkunftsübersicht wird gerade vorbereitet. Sobald die Datenbank eingerichtet ist, erscheinen hier recherchierte Unterkünfte mit öffentlich angegebenen Preisen und direktem Kontakt zum Vermieter. Preise ohne verlässliche öffentliche Angabe werden nicht erfunden.';
 }
 document.querySelector('#resetButton').addEventListener('click',()=>{resetSearch();loadAccommodations();});
-const API_BASE='https://unterkuenfte-am-tegernsee.msc4021.workers.dev';
+const API_BASE='https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev';
 function esc(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function money(value,currency='EUR'){if(value===null||value===undefined||value==='')return 'Preis auf Anfrage';try{return new Intl.NumberFormat('de-DE',{style:'currency',currency}).format(Number(value))}catch{return String(value)+' '+currency}}
 function accommodationCard(a){
@@ -397,7 +408,7 @@ function accommodationCard(a){
  const description=String(a.description||'');
  const summary=description.length>125?description.slice(0,122).trimEnd()+'…':description;
  const photo=typeof a.image_url==='string'&&/^https:\/\//i.test(a.image_url)?'<img class="result-photo" src="'+esc(a.image_url)+'" alt="Bild von '+esc(a.name)+'" loading="lazy" referrerpolicy="no-referrer">':'<div class="result-photo-placeholder" role="img" aria-label="Noch kein Unterkunftsfoto hinterlegt"><span class="house-icon" aria-hidden="true">⌂</span><strong>'+esc(a.type||'Unterkunft')+'</strong><small>Unterkunftsfoto folgt</small></div>';
- const details=prices.length?prices.map((p,index)=>'<div class="result-unit"><div class="result-unit-row"><strong>'+esc(String(p.season_label||('Ferienwohnung '+(index+1))).replace(/\s*[·•]\s*Ab-Preis\s*$/i,''))+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':'ab '+money(p.price_amount,p.currency||'EUR'))+'</strong></div></div>').join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
+ const details=prices.length?prices.map((p,index)=>{const images=Array.isArray(p.gallery_images)?p.gallery_images.filter(src=>typeof src==='string'&&/^data:image\/(jpeg|webp|png);base64,/i.test(src)):[];const gallery=images.length?'<div class="unit-gallery"><div class="unit-gallery-images" data-gallery-index="0">'+images.map((src,i)=>'<img src="'+esc(src)+'" alt="Bild '+(i+1)+' von '+esc(String(p.season_label||('Ferienwohnung '+(index+1))))+'" loading="lazy" '+(i?'hidden':'')+'>').join('')+'</div>'+(images.length>1?'<div class="gallery-controls"><button class="gallery-step" type="button" data-step="-1" aria-label="Vorheriges Bild">‹</button><span>1 / '+images.length+'</span><button class="gallery-step" type="button" data-step="1" aria-label="Nächstes Bild">›</button></div>':'')+'</div>':'<div class="unit-gallery-placeholder">Noch keine Bilder</div>';return '<div class="result-unit"><div class="result-unit-row">'+gallery+'<div class="unit-price-block"><strong class="unit-title">'+esc(String(p.season_label||('Ferienwohnung '+(index+1))).replace(/\s*[·•]\s*Ab-Preis\s*$/i,''))+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':'ab '+money(p.price_amount,p.currency||'EUR'))+'</strong></div></div></div>'}).join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
  const actions=[];
  if(a.contact_phone)actions.push('<a href="tel:'+esc(a.contact_phone)+'">Anrufen</a>');
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
@@ -406,12 +417,20 @@ function accommodationCard(a){
  return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">Ferienwohnungen und Preise</button><div class="result-details"><h4>Ferienwohnungen</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div></div></div></article>';
 }
 document.querySelector('#resultsGrid').addEventListener('click',event=>{
+ const galleryButton=event.target.closest('.gallery-step');
+ if(galleryButton){
+  const gallery=galleryButton.closest('.unit-gallery');
+  const frame=gallery?.querySelector('.unit-gallery-images');
+  const images=frame?Array.from(frame.querySelectorAll('img')):[];
+  if(images.length>1){let current=Number(frame.dataset.galleryIndex||0);current=(current+Number(galleryButton.dataset.step)+images.length)%images.length;images.forEach((img,i)=>img.hidden=i!==current);frame.dataset.galleryIndex=String(current);const counter=gallery.querySelector('.gallery-controls span');if(counter)counter.textContent=(current+1)+' / '+images.length}
+  return;
+ }
  const button=event.target.closest('.details-toggle');
  if(!button)return;
  const card=button.closest('.result-card');
  const expanded=card.classList.toggle('expanded');
  button.setAttribute('aria-expanded',String(expanded));
- button.textContent=expanded?'Details schließen':'Details ansehen';
+ button.textContent=expanded?'Details schließen':'Ferienwohnungen und Preise';
 });
 
 async function loadAccommodations(){
