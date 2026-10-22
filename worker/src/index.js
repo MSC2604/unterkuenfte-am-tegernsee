@@ -277,11 +277,10 @@ export default {
           const oldOffer = submittedId ? existingById.get(submittedId) : null;
           if (submittedId && !oldOffer) continue;
           const sourceUrlInput = typeof price.source_url === "string" ? price.source_url.trim() : "";
-          const sourceUrl = /^https?:\/\//i.test(sourceUrlInput) ? sourceUrlInput : (oldOffer?.source_url || "");
-          if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) {
-            if (oldOffer) retainedIds.add(oldOffer.id);
-            continue;
-          }
+          const accommodationUrl = typeof p.website_url === "string" && /^https?:\/\//i.test(p.website_url.trim())
+            ? p.website_url.trim()
+            : (typeof p.booking_url === "string" && /^https?:\/\//i.test(p.booking_url.trim()) ? p.booking_url.trim() : "");
+          const sourceUrl = /^https?:\/\//i.test(sourceUrlInput) ? sourceUrlInput : (oldOffer?.source_url || accommodationUrl || "");
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
           const cleaning = Number.isFinite(Number(price.extra_cleaning_amount)) && price.extra_cleaning_amount !== null && price.extra_cleaning_amount !== "" ? Number(price.extra_cleaning_amount) : null;
           const minNights = Number.isInteger(Number(price.min_nights)) && price.min_nights !== null && price.min_nights !== "" ? Number(price.min_nights) : null;
@@ -299,7 +298,7 @@ export default {
             typeof price.additional_costs_note === "string" ? price.additional_costs_note.slice(0, 1000) : null,
             price.price_on_request ? 1 : 0,
             sourceUrl.slice(0, 2000),
-            (typeof price.source_name === "string" && price.source_name.trim() ? price.source_name.trim() : oldOffer?.source_name || "").slice(0, 300)
+            (typeof price.source_name === "string" && price.source_name.trim() ? price.source_name.trim() : oldOffer?.source_name || (sourceUrl ? "Website der Unterkunft" : "Manuelle Eingabe")).slice(0, 300)
           ];
           let targetOfferId;
           if (oldOffer) {
@@ -412,8 +411,11 @@ export default {
         if (accommodationImage) batch.push(env.DB.prepare("INSERT INTO accommodation_images (accommodation_id, image_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)").bind(accommodationId, accommodationImage));
         const prices = Array.isArray(payload.prices) ? payload.prices.slice(0, 30) : [];
         for (const price of prices) {
-          const sourceUrl = typeof price.source_url === "string" ? price.source_url : null;
-          if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) continue;
+          const sourceUrlInput = typeof price.source_url === "string" ? price.source_url.trim() : "";
+          const fallbackUrl = typeof payload.website_url === "string" && /^https?:\/\//i.test(payload.website_url.trim())
+            ? payload.website_url.trim()
+            : (typeof payload.booking_url === "string" && /^https?:\/\//i.test(payload.booking_url.trim()) ? payload.booking_url.trim() : "");
+          const sourceUrl = /^https?:\/\//i.test(sourceUrlInput) ? sourceUrlInput : fallbackUrl;
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
           batch.push(env.DB.prepare(
             `INSERT INTO price_offers
