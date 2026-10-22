@@ -226,21 +226,29 @@ export default {
         const batch = [
           env.DB.prepare(
             "UPDATE accommodations SET name = ?, town = ?, address = ?, type = ?, description = ?, website_url = ?, contact_email = ?, contact_phone = ?, booking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND published = 1"
-          ).bind(p.name.trim().slice(0, 300), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), accommodationId),
-          env.DB.prepare("DELETE FROM price_offers WHERE accommodation_id = ?").bind(accommodationId)
+          ).bind(p.name.trim().slice(0, 300), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), accommodationId)
         ];
+        const existingOffers = await env.DB.prepare(
+          "SELECT id, source_url, source_name FROM price_offers WHERE accommodation_id = ?"
+        ).bind(accommodationId).all();
+        const existingById = new Map(existingOffers.results.map(item => [item.id, item]));
         const prices = Array.isArray(p.prices) ? p.prices.slice(0, 30) : [];
+        const retainedIds = new Set();
         for (const price of prices) {
-          const sourceUrl = typeof price.source_url === "string" ? price.source_url.trim() : "";
-          if (!sourceUrl || !/^https?:\\/\\//i.test(sourceUrl)) continue;
+          const submittedId = typeof price.id === "string" ? price.id : "";
+          const oldOffer = submittedId ? existingById.get(submittedId) : null;
+          if (submittedId && !oldOffer) continue;
+          const sourceUrlInput = typeof price.source_url === "string" ? price.source_url.trim() : "";
+          const sourceUrl = /^https?:\\/\\//i.test(sourceUrlInput) ? sourceUrlInput : (oldOffer?.source_url || "");
+          if (!sourceUrl || !/^https?:\\/\\//i.test(sourceUrl)) {
+            if (oldOffer) retainedIds.add(oldOffer.id);
+            continue;
+          }
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
           const cleaning = Number.isFinite(Number(price.extra_cleaning_amount)) && price.extra_cleaning_amount !== null && price.extra_cleaning_amount !== "" ? Number(price.extra_cleaning_amount) : null;
           const minNights = Number.isInteger(Number(price.min_nights)) && price.min_nights !== null && price.min_nights !== "" ? Number(price.min_nights) : null;
-          batch.push(env.DB.prepare(
-            `INSERT INTO price_offers
-             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
-             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(id(), accommodationId, amount,
+          const values = [
+            amount,
             typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
             minNights,
             typeof price.season_label === "string" ? price.season_label.slice(0, 200) : null,
@@ -251,8 +259,29 @@ export default {
             cleaning,
             typeof price.tourist_tax_note === "string" ? price.tourist_tax_note.slice(0, 1000) : null,
             typeof price.additional_costs_note === "string" ? price.additional_costs_note.slice(0, 1000) : null,
-            price.price_on_request ? 1 : 0, sourceUrl.slice(0, 2000),
-            typeof price.source_name === "string" ? price.source_name.slice(0, 300) : null));
+            price.price_on_request ? 1 : 0,
+            sourceUrl.slice(0, 2000),
+            (typeof price.source_name === "string" && price.source_name.trim() ? price.source_name.trim() : oldOffer?.source_name || "").slice(0, 300)
+          ];
+          if (oldOffer) {
+            retainedIds.add(oldOffer.id);
+            batch.push(env.DB.prepare(
+              "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_on_request = ?, source_url = ?, source_name = ? WHERE id = ? AND accommodation_id = ?"
+            ).bind(...values, oldOffer.id, accommodationId));
+          } else {
+            const newId = id();
+            batch.push(env.DB.prepare(
+              `INSERT INTO price_offers
+               (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
+               VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).bind(newId, accommodationId, ...values));
+            retainedIds.add(newId);
+          }
+        }
+        for (const oldOffer of existingOffers.results) {
+          if (!retainedIds.has(oldOffer.id)) {
+            batch.push(env.DB.prepare("DELETE FROM price_offers WHERE id = ? AND accommodation_id = ?").bind(oldOffer.id, accommodationId));
+          }
         }
         await env.DB.batch(batch);
         return json({ success: true, message: "Unterkunft und Preisangebote wurden aktualisiert." });
