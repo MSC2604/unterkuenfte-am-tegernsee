@@ -391,6 +391,9 @@ document.querySelector('#searchButton').addEventListener('click',showPreparation
 search.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();showPreparationNotice();}});
 place.addEventListener('change',()=>{if(document.querySelector('#resultsGrid').dataset.loaded==='true')loadAccommodations()});
 
+// Beim Öffnen der Hauptseite alle freigegebenen Unterkünfte automatisch anzeigen – keine Suche nötig.
+loadAccommodations();
+
 </script>
 </body>
 </html>
