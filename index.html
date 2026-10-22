@@ -184,6 +184,17 @@ footer strong{color:var(--navy)}
 .unit-gallery-placeholder{width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;border-radius:12px;background:linear-gradient(145deg,#dce7f4,#f6f8fb);color:#526985;font-size:12px;text-align:center;padding:8px}
 .gallery-controls{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:5px;font-size:11px;color:#6d7887}
 .gallery-step{border:1px solid #d4deeb;background:#fff;color:#244a79;border-radius:8px;padding:3px 8px;font:inherit;cursor:pointer}
+.unit-gallery-images img{cursor:zoom-in}
+.gallery-lightbox{position:fixed;inset:0;z-index:9999;background:rgba(8,15,27,.94);display:none;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
+.gallery-lightbox.open{display:flex}
+.gallery-lightbox-content{position:relative;width:min(100%,1100px);height:min(88vh,850px);display:flex;align-items:center;justify-content:center}
+.gallery-lightbox-image{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:8px}
+.gallery-lightbox-close,.gallery-lightbox-step{position:absolute;border:1px solid rgba(255,255,255,.5);background:rgba(20,30,45,.72);color:#fff;border-radius:999px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gallery-lightbox-close{right:0;top:0;width:44px;height:44px;font-size:28px}
+.gallery-lightbox-step{top:50%;transform:translateY(-50%);width:46px;height:54px;font-size:34px}
+.gallery-lightbox-prev{left:0}.gallery-lightbox-next{right:0}
+.gallery-lightbox-count{position:absolute;bottom:0;left:50%;transform:translateX(-50%);color:#fff;background:rgba(20,30,45,.72);border-radius:20px;padding:6px 12px;font-size:14px;white-space:nowrap}
+@media(max-width:600px){.gallery-lightbox{padding:8px}.gallery-lightbox-content{height:86vh}.gallery-lightbox-step{width:38px;height:46px;background:rgba(20,30,45,.8)}.gallery-lightbox-prev{left:2px}.gallery-lightbox-next{right:2px}.gallery-lightbox-image{max-width:100%;max-height:78vh}}
 .unit-price-block{display:flex;flex-direction:column;align-items:flex-end;gap:8px;text-align:right;min-width:0}
 .unit-price-block .unit-title{font-size:13px;color:#203149;overflow-wrap:anywhere}
 .unit-price-block .result-price{font-size:14px;white-space:nowrap;padding:6px 8px}
@@ -416,7 +427,43 @@ function accommodationCard(a){
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
  return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">Ferienwohnungen und Preise</button><div class="result-details"><h4>Ferienwohnungen</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div></div></div></article>';
 }
+const galleryLightbox=document.createElement('div');
+galleryLightbox.className='gallery-lightbox';
+galleryLightbox.setAttribute('role','dialog');
+galleryLightbox.setAttribute('aria-modal','true');
+galleryLightbox.setAttribute('aria-label','Bildergalerie');
+galleryLightbox.innerHTML='<div class="gallery-lightbox-content"><button type="button" class="gallery-lightbox-close" aria-label="Große Bildansicht schließen">×</button><button type="button" class="gallery-lightbox-step gallery-lightbox-prev" aria-label="Vorheriges Bild">‹</button><img class="gallery-lightbox-image" alt="Vergrößertes Galeriebild"><button type="button" class="gallery-lightbox-step gallery-lightbox-next" aria-label="Nächstes Bild">›</button><span class="gallery-lightbox-count"></span></div>';
+document.body.appendChild(galleryLightbox);
+let lightboxImages=[],lightboxIndex=0;
+function showLightboxImage(){
+ if(!lightboxImages.length)return;
+ lightboxIndex=(lightboxIndex+lightboxImages.length)%lightboxImages.length;
+ const image=galleryLightbox.querySelector('.gallery-lightbox-image');
+ image.src=lightboxImages[lightboxIndex].src;
+ image.alt=lightboxImages[lightboxIndex].alt||('Bild '+(lightboxIndex+1));
+ galleryLightbox.querySelector('.gallery-lightbox-count').textContent=(lightboxIndex+1)+' / '+lightboxImages.length;
+ const multi=lightboxImages.length>1;
+ galleryLightbox.querySelector('.gallery-lightbox-prev').hidden=!multi;
+ galleryLightbox.querySelector('.gallery-lightbox-next').hidden=!multi;
+}
+function closeLightbox(){galleryLightbox.classList.remove('open');document.body.style.overflow='';}
+function stepLightbox(step){if(lightboxImages.length>1){lightboxIndex=(lightboxIndex+step+lightboxImages.length)%lightboxImages.length;showLightboxImage();}}
+galleryLightbox.querySelector('.gallery-lightbox-close').addEventListener('click',closeLightbox);
+galleryLightbox.querySelector('.gallery-lightbox-prev').addEventListener('click',()=>stepLightbox(-1));
+galleryLightbox.querySelector('.gallery-lightbox-next').addEventListener('click',()=>stepLightbox(1));
+galleryLightbox.addEventListener('click',event=>{if(event.target===galleryLightbox)closeLightbox();});
+document.addEventListener('keydown',event=>{if(!galleryLightbox.classList.contains('open'))return;if(event.key==='Escape')closeLightbox();if(event.key==='ArrowLeft')stepLightbox(-1);if(event.key==='ArrowRight')stepLightbox(1);});
 document.querySelector('#resultsGrid').addEventListener('click',event=>{
+ const clickedImage=event.target.closest('.unit-gallery-images img');
+ if(clickedImage){
+  const frame=clickedImage.closest('.unit-gallery-images');
+  lightboxImages=Array.from(frame.querySelectorAll('img'));
+  lightboxIndex=Math.max(0,lightboxImages.indexOf(clickedImage));
+  showLightboxImage();
+  galleryLightbox.classList.add('open');
+  document.body.style.overflow='hidden';
+  return;
+ }
  const galleryButton=event.target.closest('.gallery-step');
  if(galleryButton){
   const gallery=galleryButton.closest('.unit-gallery');
