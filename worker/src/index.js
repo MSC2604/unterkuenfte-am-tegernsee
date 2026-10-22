@@ -210,7 +210,7 @@ export default {
         }
         return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
       }
-      if (request.method === "POST" && /^\\/api\\/admin\\/accommodations\\/[^/]+\\/update$/.test(path)) {
+      if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/update$/.test(path)) {
         const accommodationId = path.split("/")[4];
         let body;
         try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
@@ -239,8 +239,8 @@ export default {
           const oldOffer = submittedId ? existingById.get(submittedId) : null;
           if (submittedId && !oldOffer) continue;
           const sourceUrlInput = typeof price.source_url === "string" ? price.source_url.trim() : "";
-          const sourceUrl = /^https?:\\/\\//i.test(sourceUrlInput) ? sourceUrlInput : (oldOffer?.source_url || "");
-          if (!sourceUrl || !/^https?:\\/\\//i.test(sourceUrl)) {
+          const sourceUrl = /^https?:\/\//i.test(sourceUrlInput) ? sourceUrlInput : (oldOffer?.source_url || "");
+          if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) {
             if (oldOffer) retainedIds.add(oldOffer.id);
             continue;
           }
