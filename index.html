@@ -228,6 +228,37 @@ footer strong{color:var(--navy)}
 .status-note{background:#edf3fb;color:#244a79}
 .status-dot{background:#5277a6}
 input,select{outline-color:#5277a6}
+
+/* Reservierungsanfrage – zentral je Unterkunft */
+.reservation-entry{margin:14px 0 0;padding-top:13px;border-top:1px solid #e8edf3}
+.reservation-open{display:block;width:100%;border:1px solid #d3deeb;border-radius:11px;background:#fff;color:#244a79;padding:11px 13px;font:inherit;font-size:14px;font-weight:750;cursor:pointer}
+.reservation-open:hover,.reservation-open:focus-visible{background:#f2f6fb;outline:2px solid #9bb3d4;outline-offset:2px}
+.reservation-dialog{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(16,31,50,.55)}
+.reservation-dialog.open{display:flex}
+.reservation-panel{width:min(100%,560px);max-height:92vh;overflow:auto;background:#fff;border:1px solid #e0e6ee;border-radius:20px;box-shadow:0 20px 60px #10294a35;padding:22px}
+.reservation-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.reservation-head h2{margin:0;color:#244a79;font-size:22px;line-height:1.25}
+.reservation-close{flex:0 0 auto;width:36px;height:36px;border:1px solid #dce3ed;border-radius:10px;background:#fff;color:#314a6a;font-size:23px;cursor:pointer}
+.reservation-intro{margin:0 0 16px;color:#6d7887;font-size:13px}
+.reservation-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.reservation-field{min-width:0}
+.reservation-field.wide{grid-column:1/-1}
+.reservation-field label{display:block;margin:0 0 5px;font-size:13px;font-weight:750;color:#31445d}
+.reservation-field input,.reservation-field select,.reservation-field textarea{width:100%;min-width:0;border:1px solid #d6dfeb;border-radius:10px;padding:11px 12px;background:#fff;color:#203149;font:inherit;font-size:15px}
+.reservation-field textarea{min-height:82px;resize:vertical}
+.reservation-section{margin-top:14px;border:1px solid #e0e6ee;border-radius:12px;overflow:hidden}
+.reservation-section summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px;cursor:pointer;color:#244a79;font-weight:750;font-size:14px}
+.reservation-section summary::-webkit-details-marker{display:none}
+.reservation-section summary:after{content:"＋";color:#6d7887;font-size:18px;font-weight:400}
+.reservation-section[open] summary:after{content:"−"}
+.reservation-contact-fields{padding:0 13px 13px}
+.reservation-contact-fields .reservation-form-grid{gap:10px}
+.reservation-actions{display:flex;align-items:center;gap:12px;margin-top:18px}
+.reservation-submit{flex:1;border:0;border-radius:11px;background:#244a79;color:#fff;padding:12px 14px;font:inherit;font-weight:750;cursor:pointer}
+.reservation-clear{border:0;background:transparent;color:#8490a0;padding:7px 0;font:inherit;font-size:12px;text-decoration:underline;text-decoration-color:#c7ced8;cursor:pointer}
+.reservation-footnote{margin:10px 0 0;color:#7a8796;font-size:11px;line-height:1.45}
+@media(max-width:480px){.reservation-panel{padding:17px;border-radius:17px}.reservation-form-grid{gap:10px}.reservation-head h2{font-size:20px}.reservation-actions{align-items:stretch;flex-direction:column}.reservation-clear{align-self:flex-end;order:2}}
+
 </style>
 </head>
 <body>
@@ -412,6 +443,110 @@ document.querySelector('#resetButton').addEventListener('click',()=>{resetSearch
 const API_BASE='https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev';
 function esc(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function money(value,currency='EUR'){if(value===null||value===undefined||value==='')return 'Preis auf Anfrage';try{return new Intl.NumberFormat('de-DE',{style:'currency',currency}).format(Number(value))}catch{return String(value)+' '+currency}}
+
+const loadedAccommodations=new Map();
+const RESERVATION_CONTACT_KEY='tegernsee_accommodation_reservation_contact_v1';
+function accommodationKind(a){
+ const t=String(a?.type||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('de-DE');
+ if(/ferienwohnung|ferienapart|apartment|ferienhaus|fewo|ferienunterkunft/.test(t))return 'apartment';
+ if(/hotel|pension|gasthof|gasthaus|wirtshaus|zimmer|gastronomie|hostel|jugendherberge/.test(t))return 'room';
+ return 'neutral';
+}
+function accommodationUnitLabel(a){
+ const kind=accommodationKind(a);
+ return kind==='apartment'?'Wohnung':kind==='room'?'Zimmer':'Einheit';
+}
+function reservationLabel(a){
+ const kind=accommodationKind(a);
+ return kind==='apartment'?'Wohnungen und Preise':kind==='room'?'Zimmer und Preise':'Unterkunft und Preise';
+}
+function readSavedContact(){
+ try{return JSON.parse(localStorage.getItem(RESERVATION_CONTACT_KEY)||'{}')||{}}catch{return {}}
+}
+function saveReservationContact(){
+ const values={firstName:document.querySelector('#reservationFirstName')?.value.trim()||'',lastName:document.querySelector('#reservationLastName')?.value.trim()||'',email:document.querySelector('#reservationEmail')?.value.trim()||'',phone:document.querySelector('#reservationPhone')?.value.trim()||''};
+ try{localStorage.setItem(RESERVATION_CONTACT_KEY,JSON.stringify(values))}catch{}
+}
+function buildReservationDialog(){
+ if(document.querySelector('#reservationDialog'))return;
+ const dialog=document.createElement('div');
+ dialog.id='reservationDialog';dialog.className='reservation-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','reservationTitle');
+ dialog.innerHTML='<div class="reservation-panel"><div class="reservation-head"><h2 id="reservationTitle">Reservierungsanfrage</h2><button type="button" class="reservation-close" aria-label="Fenster schließen">×</button></div><p class="reservation-intro" id="reservationAccommodationName"></p><form id="reservationForm"><div class="reservation-form-grid"><div class="reservation-field"><label for="reservationArrival">Anreise *</label><input id="reservationArrival" name="arrival" type="date" required></div><div class="reservation-field"><label for="reservationDeparture">Abreise *</label><input id="reservationDeparture" name="departure" type="date" required></div><div class="reservation-field"><label for="reservationAdults">Erwachsene *</label><input id="reservationAdults" name="adults" type="number" min="1" max="30" value="2" required></div><div class="reservation-field"><label for="reservationChildren">Kinder</label><input id="reservationChildren" name="children" type="number" min="0" max="30" value="0"></div><div class="reservation-field wide" id="reservationUnitField"><label for="reservationUnit" id="reservationUnitLabel">Gewünschte Einheit (optional)</label><select id="reservationUnit" name="unit"><option value="">Keine bestimmte Einheit – allgemeine Anfrage</option></select></div></div><details class="reservation-section"><summary>Ihre Kontaktdaten</summary><div class="reservation-contact-fields"><div class="reservation-form-grid"><div class="reservation-field"><label for="reservationFirstName">Vorname *</label><input id="reservationFirstName" name="firstName" autocomplete="given-name" required></div><div class="reservation-field"><label for="reservationLastName">Nachname *</label><input id="reservationLastName" name="lastName" autocomplete="family-name" required></div><div class="reservation-field wide"><label for="reservationEmail">E-Mail-Adresse *</label><input id="reservationEmail" name="email" type="email" autocomplete="email" required></div><div class="reservation-field wide"><label for="reservationPhone">Telefonnummer (optional)</label><input id="reservationPhone" name="phone" type="tel" autocomplete="tel"></div></div></div></details><div class="reservation-field wide" style="margin-top:14px"><label for="reservationMessage">Ihre Nachricht (optional)</label><textarea id="reservationMessage" name="message" placeholder="Wünsche oder Fragen"></textarea></div><div class="reservation-actions"><button type="submit" class="reservation-submit">Anfrage stellen</button><button type="button" id="reservationClear" class="reservation-clear">Formular leeren</button></div><p class="reservation-footnote">Es wird eine E-Mail vorbereitet. Sie wird erst versendet, wenn Sie sie in Ihrem E-Mail-Programm selbst abschicken. Ihre Kontaktdaten können auf diesem Gerät gespeichert bleiben.</p></form></div>';
+ document.body.appendChild(dialog);
+ const form=dialog.querySelector('#reservationForm');
+ const contact=readSavedContact();
+ for(const [key,id] of [['firstName','reservationFirstName'],['lastName','reservationLastName'],['email','reservationEmail'],['phone','reservationPhone']]){const el=dialog.querySelector('#'+id);if(el)el.value=contact[key]||''}
+ const close=()=>{dialog.classList.remove('open');document.body.style.overflow='';};
+ dialog.querySelector('.reservation-close').addEventListener('click',close);
+ dialog.addEventListener('click',event=>{if(event.target===dialog)close()});
+ dialog.querySelectorAll('#reservationFirstName,#reservationLastName,#reservationEmail,#reservationPhone').forEach(el=>el.addEventListener('change',saveReservationContact));
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&dialog.classList.contains('open'))close()});
+ dialog.querySelector('#reservationClear').addEventListener('click',()=>{
+  if(!confirm('Möchtest du die Reisedaten, Personenzahl, Wohnungsauswahl und Nachricht wirklich leeren? Gespeicherte Kontaktdaten bleiben erhalten.'))return;
+  form.querySelector('#reservationArrival').value='';
+  form.querySelector('#reservationDeparture').value='';
+  form.querySelector('#reservationAdults').value='2';
+  form.querySelector('#reservationChildren').value='0';
+  form.querySelector('#reservationUnit').value='';
+  form.querySelector('#reservationMessage').value='';
+ });
+ form.addEventListener('submit',event=>{
+  event.preventDefault();
+  const a=loadedAccommodations.get(dialog.dataset.accommodationId);
+  if(!a){alert('Die Unterkunftsdaten sind nicht mehr verfügbar. Bitte schließe das Fenster und versuche es erneut.');return}
+  const arrivalDate=form.querySelector('#reservationArrival').value;
+  const departureDate=form.querySelector('#reservationDeparture').value;
+  if(!arrivalDate||!departureDate||departureDate<=arrivalDate){alert('Bitte wähle eine Abreise nach dem Anreisetag.');return}
+  if(!a.contact_email||!String(a.contact_email).includes('@')){alert('Für diese Unterkunft ist keine gültige E-Mail-Adresse des Vermieters hinterlegt. Bitte nutze den Kontaktbereich der Unterkunft.');return}
+  const kind=accommodationKind(a),unitLabel=accommodationUnitLabel(a);
+  const unitSelect=form.querySelector('#reservationUnit');
+  const selected=unitSelect.value;
+  const selectedText=selected?unitSelect.options[unitSelect.selectedIndex].text:'';
+  const adults=Number(form.querySelector('#reservationAdults').value);
+  const children=Number(form.querySelector('#reservationChildren').value||0);
+  if(!Number.isInteger(adults)||adults<1||!Number.isInteger(children)||children<0){alert('Bitte prüfe die Personenzahlen.');return}
+  const firstName=form.querySelector('#reservationFirstName').value.trim(),lastName=form.querySelector('#reservationLastName').value.trim(),email=form.querySelector('#reservationEmail').value.trim(),phone=form.querySelector('#reservationPhone').value.trim(),message=form.querySelector('#reservationMessage').value.trim();
+  saveReservationContact();
+  const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
+  const generalText=kind==='apartment'?'welche Ihrer Ferienwohnungen':kind==='room'?'welche Zimmer in Ihrem Haus':'welche Unterkünfte oder Einheiten';
+  const selectedNoun=kind==='apartment'?'Ferienwohnung':kind==='room'?'Zimmer':'Einheit';
+  const greeting='Guten Tag,';
+  let body=[greeting,'','ich interessiere mich für '+(selected?('die '+selectedNoun+' „'+selectedText+'“ in Ihrer Unterkunft „'+a.name+'“'):('Ihre Unterkunft „'+a.name+'“'))+' und möchte anfragen, '+(selected?'ob diese':' '+generalText+'')+' im gewünschten Zeitraum verfügbar '+(selected?'ist.':'sind.') ,'','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Erwachsene: '+adults,'Kinder: '+children,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'keine bestimmte – allgemeine Anfrage'),'','Meine Kontaktdaten:','Name: '+firstName+' '+lastName,'E-Mail: '+email];
+  if(phone)body.push('Telefon: '+phone);
+  if(message)body.push('','Weitere Nachricht: '+message);
+  body.push('','Bitte teilen Sie mir die Verfügbarkeit und den Gesamtpreis mit.','','Freundliche Grüße',firstName+' '+lastName);
+  const subject=(selected?'Reservierungsanfrage – '+selectedText:'Allgemeine Reservierungsanfrage')+' – '+a.name;
+  const mailto='mailto:'+encodeURIComponent(a.contact_email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body.join('\n'));
+  window.location.href=mailto;
+  close();
+ });
+}
+function openReservation(accommodationId){
+ const a=loadedAccommodations.get(String(accommodationId));
+ if(!a)return;
+ buildReservationDialog();
+ const dialog=document.querySelector('#reservationDialog'),form=dialog.querySelector('#reservationForm');
+ dialog.dataset.accommodationId=String(accommodationId);
+ dialog.querySelector('#reservationAccommodationName').textContent=a.name+(a.town?' · '+a.town:'');
+ const kind=accommodationKind(a),unitLabel=accommodationUnitLabel(a);
+ dialog.querySelector('#reservationUnitLabel').textContent='Gewünschte '+unitLabel+' (optional)';
+ const select=dialog.querySelector('#reservationUnit');
+ select.innerHTML='<option value="">Keine bestimmte '+unitLabel.toLocaleLowerCase('de-DE')+' – allgemeine Anfrage</option>';
+ (Array.isArray(a.prices)?a.prices:[]).forEach((p,index)=>{
+  const name=String(p.season_label||((unitLabel==='Wohnung'?'Wohnung':unitLabel==='Zimmer'?'Zimmer':'Einheit')+' '+(index+1))).replace(/\\s*[·•]\\s*Ab-Preis\\s*$/i,'').trim();
+  const option=document.createElement('option');option.value=String(p.id||('unit-'+index));option.textContent=name;select.appendChild(option);
+ });
+ form.querySelector('#reservationArrival').value='';
+ form.querySelector('#reservationDeparture').value='';
+ form.querySelector('#reservationAdults').value='2';
+ form.querySelector('#reservationChildren').value='0';
+ form.querySelector('#reservationMessage').value='';
+ const saved=readSavedContact();
+ for(const [key,id] of [['firstName','reservationFirstName'],['lastName','reservationLastName'],['email','reservationEmail'],['phone','reservationPhone']])form.querySelector('#'+id).value=saved[key]||'';
+ dialog.classList.add('open');document.body.style.overflow='hidden';
+ dialog.querySelector('#reservationArrival').focus();
+}
+
 function accommodationCard(a){
  const prices=Array.isArray(a.prices)?a.prices:[];
  const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined&&p.price_amount!=='');
@@ -427,7 +562,7 @@ function accommodationCard(a){
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
  if(a.website_url)actions.push('<a class="primary" href="'+esc(a.website_url)+'" target="_blank" rel="noopener noreferrer">Website öffnen</a>');
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
- return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">Ferienwohnungen und Preise</button><div class="result-details"><h4>Ferienwohnungen</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div></div></div></article>';
+ const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
 }
 const galleryLightbox=document.createElement('div');
 galleryLightbox.className='gallery-lightbox';
@@ -474,6 +609,8 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
   if(images.length>1){let current=Number(frame.dataset.galleryIndex||0);current=(current+Number(galleryButton.dataset.step)+images.length)%images.length;images.forEach((img,i)=>img.hidden=i!==current);frame.dataset.galleryIndex=String(current);const counter=gallery.querySelector('.gallery-controls span');if(counter)counter.textContent=(current+1)+' / '+images.length}
   return;
  }
+ const reservationButton=event.target.closest('.reservation-open');
+ if(reservationButton){openReservation(reservationButton.dataset.reservationId);return;}
  const button=event.target.closest('.details-toggle');
  if(!button)return;
  const card=button.closest('.result-card');
@@ -495,6 +632,7 @@ async function loadAccommodations(){
   if(!response.ok)throw new Error('HTTP '+response.status);
   const data=await response.json();
   const items=Array.isArray(data.accommodations)?data.accommodations:[];
+  loadedAccommodations.clear();items.forEach(item=>{if(item&&item.id)loadedAccommodations.set(String(item.id),item)});
   grid.dataset.loaded='true';grid.innerHTML=items.length?items.map(accommodationCard).join(''):'<div class="result-empty">Zu dieser Auswahl wurden keine freigegebenen Unterkünfte gefunden. Versuche einen anderen Ort oder eine andere Unterkunftsart.</div>';
   document.querySelector('#statusTitle').textContent=items.length?items.length+' freigegebene Unterkünfte gefunden':'Keine passenden Unterkünfte gefunden';
   document.querySelector('#statusText').textContent='Angezeigt werden ausschließlich freigegebene Unterkünfte. Die angegebenen Preise sind Orientierungswerte; Preis und Verfügbarkeit für deinen Reisezeitraum bitte beim Gastgeber prüfen.';
