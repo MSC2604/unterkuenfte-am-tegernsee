@@ -24,6 +24,12 @@ async function ensureAccommodationImageTable(env) {
 function safeAccommodationImage(value) {
   return typeof value === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(value) && value.length <= 260000 ? value : "";
 }
+async function ensureOccupancyColumn(env) {
+  const { results } = await env.DB.prepare("PRAGMA table_info(price_offers)").all();
+  if (!results.some(column => column.name === "occupancy")) {
+    await env.DB.prepare("ALTER TABLE price_offers ADD COLUMN occupancy INTEGER").run();
+  }
+}
 async function ensureGalleryTable(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS price_offer_galleries (
     price_offer_id TEXT PRIMARY KEY,
@@ -78,9 +84,10 @@ export default {
         // If a valid stay is supplied, retain general offers and offers whose stated dates cover that stay.
         // This is a date relevance filter, not a guarantee of live availability.
         await ensureGalleryTable(env);
+        await ensureOccupancyColumn(env);
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
-                  p.min_nights, p.season_label, p.valid_from, p.valid_to,
+                  p.min_nights, p.season_label, p.occupancy, p.valid_from, p.valid_to,
                   p.arrival_date, p.departure_date, p.extra_cleaning_amount,
                   p.tourist_tax_note, p.additional_costs_note, p.price_on_request,
                   p.source_url, p.source_name, p.researched_at
@@ -223,12 +230,13 @@ export default {
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         await ensureGalleryTable(env);
+        await ensureOccupancyColumn(env);
         await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
           "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
         ).all();
         const { results: offers } = await env.DB.prepare(
-          "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name FROM price_offers ORDER BY researched_at DESC"
+          "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name FROM price_offers ORDER BY researched_at DESC"
         ).all();
         const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
         const galleryByOffer = new Map();
@@ -289,6 +297,7 @@ export default {
             typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
             minNights,
             typeof price.season_label === "string" ? price.season_label.slice(0, 200) : null,
+            Number.isInteger(Number(price.occupancy)) && price.occupancy !== null && price.occupancy !== "" ? Number(price.occupancy) : null,
             typeof price.valid_from === "string" && price.valid_from ? price.valid_from : null,
             typeof price.valid_to === "string" && price.valid_to ? price.valid_to : null,
             typeof price.arrival_date === "string" && price.arrival_date ? price.arrival_date : null,
@@ -305,15 +314,15 @@ export default {
             targetOfferId = oldOffer.id;
             retainedIds.add(oldOffer.id);
             batch.push(env.DB.prepare(
-              "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_on_request = ?, source_url = ?, source_name = ? WHERE id = ? AND accommodation_id = ?"
+              "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, occupancy = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_on_request = ?, source_url = ?, source_name = ? WHERE id = ? AND accommodation_id = ?"
             ).bind(...values, oldOffer.id, accommodationId));
           } else {
             const newId = id();
             targetOfferId = newId;
             batch.push(env.DB.prepare(
               `INSERT INTO price_offers
-               (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
-               VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+               (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
+               VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(newId, accommodationId, ...values));
             retainedIds.add(newId);
           }
@@ -389,6 +398,7 @@ export default {
         return json({ success: (result.meta?.changes || 0) > 0 });
       }
       if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/approve$/.test(path)) {
+        await ensureOccupancyColumn(env);
         const draftId = path.split("/")[4];
         const draft = await env.DB.prepare(
           "SELECT id, payload_json, source_urls_json FROM research_drafts WHERE id = ? AND status = 'pending'"
@@ -419,12 +429,13 @@ export default {
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
           batch.push(env.DB.prepare(
             `INSERT INTO price_offers
-             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
-             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
+             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(id(), accommodationId, amount,
             typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
             Number.isInteger(price.min_nights) ? price.min_nights : null,
             typeof price.season_label === "string" ? price.season_label.slice(0, 200) : null,
+            Number.isInteger(Number(price.occupancy)) && price.occupancy !== null && price.occupancy !== "" ? Number(price.occupancy) : null,
             typeof price.valid_from === "string" ? price.valid_from : null,
             typeof price.valid_to === "string" ? price.valid_to : null,
             typeof price.arrival_date === "string" ? price.arrival_date : null,
