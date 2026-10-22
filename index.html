@@ -188,6 +188,22 @@ footer strong{color:var(--navy)}
 @media(max-width:900px){.results-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.result-photo,.result-photo-placeholder{height:170px}}
 @media(max-width:600px){.results-grid{grid-template-columns:1fr;gap:14px}.result-photo,.result-photo-placeholder{height:210px}.result-card-body{padding:15px}}
 
+
+/* Einheitliches Bayern-Blau auch für Akzente, Auswahlfelder und Buttons */
+:root{--navy:#244a79;--blue:#244a79;--teal:#e8eff8;--sand:#f4f7fb;--ink:#203149;--muted:#6d7887;--line:#e0e6ee;--shadow:0 8px 24px rgba(36,74,121,.09)}
+.place-chip.active,.filter.active{background:#e8eff8;border-color:#9bb4d6;color:#244a79}
+.place-chip,.filter{border-color:#dce3ed;color:#365477}
+.browse-icon,.price-card .price-icon{background:#e8eff8}
+.browse-card:hover,.browse-card:focus-visible,.browse-card.selected{border-color:#9bb4d6;background:#f4f7fc;outline-color:#5277a6}
+.preview-art{background:linear-gradient(145deg,#e8eff8,#c4d5ec);color:#244a79}
+.preview-tag{background:#e8eff8;color:#244a79}
+.preview-price,.result-price,.price-value{color:#244a79}
+.preview-action,.result-actions a{border-color:#d6dfeb;color:#244a79}
+.preview-action.primary,.result-actions a.primary{background:#244a79;border-color:#244a79;color:#fff}
+.status-icon{background:#e8eff8}
+.status-note{background:#edf3fb;color:#244a79}
+.status-dot{background:#5277a6}
+input,select{outline-color:#5277a6}
 </style>
 </head>
 <body>
