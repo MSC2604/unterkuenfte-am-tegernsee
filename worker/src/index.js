@@ -198,9 +198,64 @@ export default {
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         const { results } = await env.DB.prepare(
-          "SELECT id, name, town, type, address FROM accommodations WHERE published = 1 ORDER BY name COLLATE NOCASE"
+          "SELECT id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url FROM accommodations WHERE published = 1 ORDER BY name COLLATE NOCASE"
         ).all();
-        return json({ accommodations: results });
+        const { results: offers } = await env.DB.prepare(
+          "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name FROM price_offers ORDER BY researched_at DESC"
+        ).all();
+        const byAccommodation = new Map();
+        for (const offer of offers) {
+          if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
+          byAccommodation.get(offer.accommodation_id).push(offer);
+        }
+        return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
+      }
+      if (request.method === "POST" && /^\\/api\\/admin\\/accommodations\\/[^/]+\\/update$/.test(path)) {
+        const accommodationId = path.split("/")[4];
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
+        const p = body?.payload;
+        if (!p || typeof p !== "object" || Array.isArray(p) || typeof p.name !== "string" || !p.name.trim()) {
+          return json({ error: "Bitte einen Unterkunftsnamen angeben." }, 400);
+        }
+        const existing = await env.DB.prepare(
+          "SELECT id FROM accommodations WHERE id = ? AND published = 1"
+        ).bind(accommodationId).first();
+        if (!existing) return json({ error: "Veröffentlichte Unterkunft nicht gefunden." }, 404);
+        const str = key => typeof p[key] === "string" ? p[key].trim().slice(0, key === "description" ? 5000 : 3000) || null : null;
+        const batch = [
+          env.DB.prepare(
+            "UPDATE accommodations SET name = ?, town = ?, address = ?, type = ?, description = ?, website_url = ?, contact_email = ?, contact_phone = ?, booking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND published = 1"
+          ).bind(p.name.trim().slice(0, 300), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), accommodationId),
+          env.DB.prepare("DELETE FROM price_offers WHERE accommodation_id = ?").bind(accommodationId)
+        ];
+        const prices = Array.isArray(p.prices) ? p.prices.slice(0, 30) : [];
+        for (const price of prices) {
+          const sourceUrl = typeof price.source_url === "string" ? price.source_url.trim() : "";
+          if (!sourceUrl || !/^https?:\\/\\//i.test(sourceUrl)) continue;
+          const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
+          const cleaning = Number.isFinite(Number(price.extra_cleaning_amount)) && price.extra_cleaning_amount !== null && price.extra_cleaning_amount !== "" ? Number(price.extra_cleaning_amount) : null;
+          const minNights = Number.isInteger(Number(price.min_nights)) && price.min_nights !== null && price.min_nights !== "" ? Number(price.min_nights) : null;
+          batch.push(env.DB.prepare(
+            `INSERT INTO price_offers
+             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
+             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(id(), accommodationId, amount,
+            typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
+            minNights,
+            typeof price.season_label === "string" ? price.season_label.slice(0, 200) : null,
+            typeof price.valid_from === "string" && price.valid_from ? price.valid_from : null,
+            typeof price.valid_to === "string" && price.valid_to ? price.valid_to : null,
+            typeof price.arrival_date === "string" && price.arrival_date ? price.arrival_date : null,
+            typeof price.departure_date === "string" && price.departure_date ? price.departure_date : null,
+            cleaning,
+            typeof price.tourist_tax_note === "string" ? price.tourist_tax_note.slice(0, 1000) : null,
+            typeof price.additional_costs_note === "string" ? price.additional_costs_note.slice(0, 1000) : null,
+            price.price_on_request ? 1 : 0, sourceUrl.slice(0, 2000),
+            typeof price.source_name === "string" ? price.source_name.slice(0, 300) : null));
+        }
+        await env.DB.batch(batch);
+        return json({ success: true, message: "Unterkunft und Preisangebote wurden aktualisiert." });
       }
       if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/delete$/.test(path)) {
         const accommodationId = path.split("/")[4];
