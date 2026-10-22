@@ -86,13 +86,33 @@ function renderPublished(){
  if(!published.length){root.innerHTML='<p class="muted">Keine veröffentlichten Unterkünfte vorhanden.</p>';return}
  published.forEach(a=>{
   const card=document.createElement('div');card.className='draft';
-  card.innerHTML='<h3>'+esc(a.name)+'</h3><p class="muted">'+esc([a.town,a.type,a.address].filter(Boolean).join(' · '))+'</p><button class="danger">Unterkunft endgültig löschen</button><p class="muted">Löscht auch alle zugehörigen Preisangebote. Dieser Schritt kann nicht rückgängig gemacht werden.</p><div class="status feedback"></div>';
-  card.querySelector('button').onclick=async()=>{
-   const confirmation=prompt('Zum endgültigen Löschen bitte den Unterkunftsnamen exakt eingeben:\\n'+a.name);
+  card.innerHTML='<h3>'+esc(a.name)+'</h3><p class="muted">'+esc([a.town,a.type,a.address].filter(Boolean).join(' · '))+'</p><button class="secondary edit-accommodation">Eintrag bearbeiten</button><button class="danger delete-accommodation">Unterkunft endgültig löschen</button><p class="muted">Beim Bearbeiten bleiben Unterkunft und Preisangebote erhalten. Löschen entfernt beides endgültig.</p><div class="edit-area hidden"></div><div class="status feedback"></div>';
+  const editArea=card.querySelector('.edit-area');
+  card.querySelector('.edit-accommodation').onclick=()=>{
+   if(!editArea.classList.contains('hidden')){editArea.classList.add('hidden');return}
+   editArea.innerHTML='<h2>Unterkunft bearbeiten</h2><p class="muted">Ändere nur die Angaben, die du korrigieren möchtest. Bestehende Preisangebote werden zum Bearbeiten geladen.</p><div class="grid">'+field('name','Hauptname',a.name,'text')+field('town','Ort',a.town,'text')+field('address','Adresse',a.address,'text')+field('type','Art der Unterkunft',a.type,'text')+field('contact_email','E-Mail',a.contact_email,'email')+field('contact_phone','Telefon',a.contact_phone,'text')+field('website_url','Website',a.website_url,'url')+field('booking_url','Kontakt-/Buchungsseite',a.booking_url,'url')+field('description','Beschreibung und Hinweise',a.description,'textarea',true)+'</div><h3 style="margin-top:18px">Preisangebote</h3><p class="muted">Bitte bestehende Angaben prüfen. Ein Preisangebot ohne gültige Originalquellen-URL kann nicht gespeichert werden.</p><div class="price-list"></div><button type="button" class="secondary add-price">+ Preisangebot hinzufügen</button><br><button type="button" class="save-accommodation">Änderungen speichern</button><button type="button" class="secondary cancel-edit">Abbrechen</button>';
+   const priceList=editArea.querySelector('.price-list');
+   (Array.isArray(a.prices)?a.prices:[]).forEach(p=>priceList.appendChild(makePriceRow({...p,price_on_request:!!p.price_on_request})));
+   editArea.querySelector('.add-price').onclick=()=>priceList.appendChild(makePriceRow({price_on_request:true}));
+   editArea.querySelector('.cancel-edit').onclick=()=>editArea.classList.add('hidden');
+   editArea.querySelector('.save-accommodation').onclick=async()=>{
+    const feedback=card.querySelector('.feedback');const button=editArea.querySelector('.save-accommodation');
+    const payload={};editArea.querySelectorAll('[data-key]').forEach(el=>payload[el.dataset.key]=el.value.trim());
+    payload.prices=Array.from(priceList.querySelectorAll('.price-card')).map(row=>{const item={};row.querySelectorAll('[data-price-key]').forEach(el=>item[el.dataset.priceKey]=el.type==='checkbox'?el.checked:el.value.trim());for(const k of ['price_amount','min_nights','valid_from','valid_to','arrival_date','departure_date','extra_cleaning_amount'])if(item[k]==='')item[k]=null;else if(['price_amount','min_nights','extra_cleaning_amount'].includes(k))item[k]=Number(item[k]);return item});
+    if(!payload.name){feedback.textContent='Bitte einen Hauptnamen eintragen.';return}
+    if(!confirm('Änderungen an „'+a.name+'“ speichern? Die Unterkunft bleibt veröffentlicht.'))return;
+    button.disabled=true;
+    try{const result=await api('/api/admin/accommodations/'+encodeURIComponent(a.id)+'/update',{method:'POST',body:JSON.stringify({payload})});feedback.textContent=result.message||'Änderungen gespeichert.';await load()}
+    catch(e){button.disabled=false;feedback.textContent='Fehler beim Speichern: '+e.message}
+   };
+   editArea.classList.remove('hidden');
+  };
+  card.querySelector('.delete-accommodation').onclick=async()=>{
+   const confirmation=prompt('Zum endgültigen Löschen bitte den Unterkunftsnamen exakt eingeben:\n'+a.name);
    if(confirmation===null)return;
    if(confirmation.trim()!==a.name){card.querySelector('.feedback').textContent='Name stimmt nicht exakt überein. Es wurde nichts gelöscht.';return}
    if(!confirm('Wirklich endgültig löschen: „'+a.name+'“ samt allen Preisangeboten?'))return;
-   const button=card.querySelector('button');button.disabled=true;
+   const button=card.querySelector('.delete-accommodation');button.disabled=true;
    try{const result=await api('/api/admin/accommodations/'+encodeURIComponent(a.id)+'/delete',{method:'POST',body:'{}'});status(result.message||'Unterkunft gelöscht.');await load()}
    catch(e){button.disabled=false;card.querySelector('.feedback').textContent='Fehler: '+e.message}
   };
