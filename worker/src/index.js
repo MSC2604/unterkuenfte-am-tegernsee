@@ -110,7 +110,7 @@ export default {
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.occupancy, p.valid_from, p.valid_to,
                   p.arrival_date, p.departure_date, p.extra_cleaning_amount,
-                  p.tourist_tax_note, p.additional_costs_note, p.price_display_note, p.unit_description, p.price_on_request,
+                  p.tourist_tax_note, p.additional_costs_note, p.price_display_note, p.unit_description, p.show_price_ab, p.price_on_request,
                   p.source_url, p.source_name, p.researched_at
              FROM price_offers p
              JOIN accommodations a ON a.id = p.accommodation_id
