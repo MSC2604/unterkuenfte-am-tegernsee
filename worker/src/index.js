@@ -195,6 +195,24 @@ export default {
           message: "Recherche als Entwurf gespeichert. Noch nicht veröffentlicht; Preise und Kontaktdaten müssen anhand der Quellen geprüft werden."
         }, 201);
       }
+      if (request.method === "GET" && path === "/api/admin/accommodations") {
+        const { results } = await env.DB.prepare(
+          "SELECT id, name, town, type, address FROM accommodations WHERE published = 1 ORDER BY name COLLATE NOCASE"
+        ).all();
+        return json({ accommodations: results });
+      }
+      if (request.method === "POST" && /^\\/api\\/admin\\/accommodations\\/[^/]+\\/delete$/.test(path)) {
+        const accommodationId = path.split("/")[4];
+        const existing = await env.DB.prepare(
+          "SELECT id, name FROM accommodations WHERE id = ? AND published = 1"
+        ).bind(accommodationId).first();
+        if (!existing) return json({ error: "Veröffentlichte Unterkunft nicht gefunden." }, 404);
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM price_offers WHERE accommodation_id = ?").bind(accommodationId),
+          env.DB.prepare("DELETE FROM accommodations WHERE id = ? AND published = 1").bind(accommodationId)
+        ]);
+        return json({ success: true, deleted_name: existing.name, message: "Unterkunft und zugehörige Preisangebote wurden endgültig gelöscht." });
+      }
       if (request.method === "GET" && path === "/api/admin/drafts") {
         const { results } = await env.DB.prepare(
           "SELECT id, query, payload_json, source_urls_json, status, researched_at FROM research_drafts WHERE status = 'pending' ORDER BY researched_at DESC"
