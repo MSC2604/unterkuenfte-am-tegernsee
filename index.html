@@ -562,7 +562,7 @@ function accommodationCard(a){
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
  if(a.website_url)actions.push('<a class="primary" href="'+esc(a.website_url)+'" target="_blank" rel="noopener noreferrer">Website öffnen</a>');
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
- const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
+ const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
 }
 const galleryLightbox=document.createElement('div');
 galleryLightbox.className='gallery-lightbox';
@@ -616,7 +616,7 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
  const card=button.closest('.result-card');
  const expanded=card.classList.toggle('expanded');
  button.setAttribute('aria-expanded',String(expanded));
- button.textContent=expanded?'Details schließen':'Ferienwohnungen und Preise';
+ button.textContent=expanded?'Details schließen':reservationLabel(loadedAccommodations.get(card.dataset.accommodationId)||{});
 });
 
 async function loadAccommodations(){
