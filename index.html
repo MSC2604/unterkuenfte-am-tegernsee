@@ -476,6 +476,7 @@ function buildReservationDialog(){
  const form=dialog.querySelector('#reservationForm');
  const contact=readSavedContact();
  for(const [key,id] of [['firstName','reservationFirstName'],['lastName','reservationLastName'],['email','reservationEmail'],['phone','reservationPhone']]){const el=dialog.querySelector('#'+id);if(el)el.value=contact[key]||''}
+ form.addEventListener('invalid',event=>{const section=event.target.closest('details');if(section)section.open=true;},true);
  const close=()=>{dialog.classList.remove('open');document.body.style.overflow='';};
  dialog.querySelector('.reservation-close').addEventListener('click',close);
  dialog.addEventListener('click',event=>{if(event.target===dialog)close()});
