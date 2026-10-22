@@ -338,8 +338,11 @@ export default {
           "SELECT id, name FROM accommodations WHERE id = ? AND published = 1"
         ).bind(accommodationId).first();
         if (!existing) return json({ error: "Veröffentlichte Unterkunft nicht gefunden." }, 404);
+        await ensureAccommodationImageTable(env);
         await env.DB.batch([
+          env.DB.prepare("DELETE FROM price_offer_galleries WHERE accommodation_id = ?").bind(accommodationId),
           env.DB.prepare("DELETE FROM price_offers WHERE accommodation_id = ?").bind(accommodationId),
+          env.DB.prepare("DELETE FROM accommodation_images WHERE accommodation_id = ?").bind(accommodationId),
           env.DB.prepare("DELETE FROM accommodations WHERE id = ? AND published = 1").bind(accommodationId)
         ]);
         return json({ success: true, deleted_name: existing.name, message: "Unterkunft und zugehörige Preisangebote wurden endgültig gelöscht." });
