@@ -393,11 +393,11 @@ function accommodationCard(a){
  const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined&&p.price_amount!=='');
  const lowest=validPrices.length?Math.min(...validPrices.map(p=>Number(p.price_amount))):null;
  const lowestOffer=validPrices.find(p=>Number(p.price_amount)===lowest);
- const priceLine=lowest===null?'Preis auf Anfrage':money(lowest,lowestOffer?.currency||'EUR');
+ const priceLine=lowest===null?'Preis auf Anfrage':'ab '+money(lowest,lowestOffer?.currency||'EUR');
  const description=String(a.description||'');
  const summary=description.length>125?description.slice(0,122).trimEnd()+'…':description;
  const photo=typeof a.image_url==='string'&&/^https:\/\//i.test(a.image_url)?'<img class="result-photo" src="'+esc(a.image_url)+'" alt="Bild von '+esc(a.name)+'" loading="lazy" referrerpolicy="no-referrer">':'<div class="result-photo-placeholder" role="img" aria-label="Noch kein Unterkunftsfoto hinterlegt"><span class="house-icon" aria-hidden="true">⌂</span><strong>'+esc(a.type||'Unterkunft')+'</strong><small>Unterkunftsfoto folgt</small></div>';
- const details=prices.length?prices.map((p,index)=>'<div class="result-unit"><div class="result-unit-row"><strong>'+esc(p.season_label||('Ferienwohnung '+(index+1)))+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':money(p.price_amount,p.currency||'EUR'))+'</strong></div></div>').join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
+ const details=prices.length?prices.map((p,index)=>'<div class="result-unit"><div class="result-unit-row"><strong>'+esc(String(p.season_label||('Ferienwohnung '+(index+1))).replace(/\\s*[·•]\\s*Ab-Preis\\s*$/i,''))+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':'ab '+money(p.price_amount,p.currency||'EUR'))+'</strong></div></div>').join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
  const actions=[];
  if(a.contact_phone)actions.push('<a href="tel:'+esc(a.contact_phone)+'">Anrufen</a>');
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
