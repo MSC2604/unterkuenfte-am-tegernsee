@@ -38,7 +38,7 @@ button.danger{background:#8a3434}
 <section class="panel">
 <h2>1. Verbindung</h2>
 <p class="muted">Trage die Worker-Adresse und dein Admin-Token ein. Das Token wird nur während dieser geöffneten Seite verwendet und nicht gespeichert.</p>
-<label for="api">Worker-Adresse</label><input id="api" value="https://unterkuenfte-am-tegernsee.msc4021.workers.dev" autocomplete="url">
+<label for="api">Worker-Adresse</label><input id="api" value="https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev" autocomplete="url">
 <label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN">
 <button id="connect">Verwaltung laden</button><button id="newSearch" class="secondary">Neue Webrecherche</button>
 <div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
@@ -68,8 +68,8 @@ async function load(){
   }catch(e){
    published=[];
    const root=$('published');
-   root.innerHTML='<p class="status">Die Anmeldung funktioniert, aber die neue Löschfunktion ist im Cloudflare-Worker noch nicht verfügbar. Bitte Worker aktualisieren lassen. Details: '+esc(e.message)+'</p>';
-   status(drafts.length+' offene Entwürfe geladen. Löschfunktion wartet auf Worker-Update.');
+   root.innerHTML='<p class="status">Die Anmeldung funktioniert, aber die Liste der veröffentlichten Unterkünfte konnte nicht geladen werden. Prüfe die Worker-Adresse und den Admin-Zugriff. Details: '+esc(e.message)+'</p>';
+   status(drafts.length+' offene Entwürfe geladen. Die Liste der veröffentlichten Unterkünfte konnte nicht geladen werden.');
   }
  }catch(e){
   if(/Falsches Passwort/.test(e.message)){status('⚠️ '+e.message)}
