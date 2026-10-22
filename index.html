@@ -509,9 +509,9 @@ function buildReservationDialog(){
   saveReservationContact();
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
   const generalText=kind==='apartment'?'welche Ihrer Ferienwohnungen':kind==='room'?'welche Zimmer in Ihrem Haus':'welche Unterkünfte oder Einheiten';
-  const selectedNoun=kind==='apartment'?'Ferienwohnung':kind==='room'?'Zimmer':'Einheit';
+  const selectedPhrase=kind==='apartment'?'die Ferienwohnung':kind==='room'?'das Zimmer':'die Einheit';
   const greeting='Guten Tag,';
-  let body=[greeting,'','ich interessiere mich für '+(selected?('die '+selectedNoun+' „'+selectedText+'“ in Ihrer Unterkunft „'+a.name+'“'):('Ihre Unterkunft „'+a.name+'“'))+' und möchte anfragen, '+(selected?'ob diese':' '+generalText+'')+' im gewünschten Zeitraum verfügbar '+(selected?'ist.':'sind.') ,'','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Erwachsene: '+adults,'Kinder: '+children,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'keine bestimmte – allgemeine Anfrage'),'','Meine Kontaktdaten:','Name: '+firstName+' '+lastName,'E-Mail: '+email];
+  let body=[greeting,'','ich interessiere mich für '+(selected?(selectedPhrase+' „'+selectedText+'“ in Ihrer Unterkunft „'+a.name+'“'):('Ihre Unterkunft „'+a.name+'“'))+' und möchte anfragen, '+(selected?'ob diese':' '+generalText+'')+' im gewünschten Zeitraum verfügbar '+(selected?'ist.':'sind.') ,'','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Erwachsene: '+adults,'Kinder: '+children,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'keine bestimmte – allgemeine Anfrage'),'','Meine Kontaktdaten:','Name: '+firstName+' '+lastName,'E-Mail: '+email];
   if(phone)body.push('Telefon: '+phone);
   if(message)body.push('','Weitere Nachricht: '+message);
   body.push('','Bitte teilen Sie mir die Verfügbarkeit und den Gesamtpreis mit.','','Freundliche Grüße',firstName+' '+lastName);
