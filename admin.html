@@ -17,6 +17,19 @@ button.secondary{background:var(--pale);color:var(--green);border:1px solid var(
 .status{padding:10px 12px;border-radius:8px;background:var(--pale);margin:10px 0;white-space:pre-wrap}.result{border-top:1px solid var(--line);padding:12px 0}.result a{color:var(--green);font-weight:700;overflow-wrap:anywhere}.price-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}.checkrow{display:flex;gap:8px;align-items:center;margin-top:10px}.checkrow input{width:auto}
 .pill{display:inline-block;border-radius:20px;background:var(--pale);padding:3px 9px;font-size:.82rem}.hidden{display:none}
 @media(max-width:620px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}header{padding:18px}}
+
+/* Verwaltung im gleichen Bayern-Blau wie die Startseite */
+:root{color-scheme:light;--green:#244a79;--pale:#e8eff8;--ink:#203149;--line:#d6dfeb}
+body{background:#f4f7fb;color:var(--ink)}
+header{background:linear-gradient(120deg,#193b68,#244a79 70%,#5277a6)}
+.panel,.draft{border-color:#e0e6ee;box-shadow:0 6px 20px rgba(36,74,121,.06)}
+input,textarea,select{border-color:#cbd7e7;outline-color:#5277a6}
+button{background:#244a79;color:#fff}
+button.secondary{background:#e8eff8;color:#244a79;border-color:#d6dfeb}
+button.danger{background:#8a3434}
+.status,.pill{background:#e8eff8;color:#244a79}
+.result{border-color:#e0e6ee}.result a{color:#244a79}
+.price-card{border-color:#d6dfeb}
 </style>
 </head>
 <body>
