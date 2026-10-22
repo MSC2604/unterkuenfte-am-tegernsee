@@ -55,7 +55,27 @@ function status(s){$('status').textContent=s}
 async function api(path,opts={}){const r=await fetch(base()+path,{...opts,headers:{...headers(),...(opts.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok){if(r.status===401||r.status===403)throw new Error('Falsches Passwort bzw. Admin-Token. Bitte Eingabe prüfen und erneut versuchen.');throw new Error(d.error||('HTTP '+r.status))}return d}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function parse(d){try{return typeof d.payload_json==='string'?JSON.parse(d.payload_json):(d.payload||{})}catch{return {}}}
-async function load(){try{const results=await Promise.all([api('/api/admin/drafts'),api('/api/admin/accommodations')]);drafts=results[0].drafts||[];published=results[1].accommodations||[];status(drafts.length+' offene Entwürfe und '+published.length+' veröffentlichte Unterkünfte geladen.');render();renderPublished()}catch(e){if(/Falsches Passwort/.test(e.message)){status('⚠️ '+e.message)}else{status('Fehler: '+e.message+'\\nPrüfe Worker-Adresse sowie ob Worker und Datenbank eingerichtet sind.')}} }
+async function load(){
+ try{
+  const d=await api('/api/admin/drafts');
+  drafts=d.drafts||[];
+  render();
+  try{
+   const a=await api('/api/admin/accommodations');
+   published=a.accommodations||[];
+   renderPublished();
+   status(drafts.length+' offene Entwürfe und '+published.length+' veröffentlichte Unterkünfte geladen.');
+  }catch(e){
+   published=[];
+   const root=$('published');
+   root.innerHTML='<p class="status">Die Anmeldung funktioniert, aber die neue Löschfunktion ist im Cloudflare-Worker noch nicht verfügbar. Bitte Worker aktualisieren lassen. Details: '+esc(e.message)+'</p>';
+   status(drafts.length+' offene Entwürfe geladen. Löschfunktion wartet auf Worker-Update.');
+  }
+ }catch(e){
+  if(/Falsches Passwort/.test(e.message)){status('⚠️ '+e.message)}
+  else{status('Fehler beim Laden der Verwaltung: '+e.message+'\\nPrüfe Worker-Adresse sowie ob Worker und Datenbank eingerichtet sind.')}
+ }
+}
 function render(){const root=$('drafts');root.innerHTML='';if(!drafts.length){root.innerHTML='<section class="panel"><p>Keine offenen Entwürfe vorhanden.</p></section>';return}
 drafts.forEach(d=>{const p=parse(d);const query=String(d.query||'').trim();if((!p.name||p.name.trim().toLocaleLowerCase('de-DE')===query.toLocaleLowerCase('de-DE'))&&query&&!/^https?:\/\//i.test(query)&&Array.isArray(p.research_results)){const official=p.research_results.find(x=>{try{const host=new URL(x.url).hostname.toLowerCase();return (host==='tegernsee.com'||host.endsWith('.tegernsee.com'))&&typeof x.title==='string'&&x.title.toLocaleLowerCase('de-DE').includes(query.toLocaleLowerCase('de-DE'))}catch{return false}});if(official){const canonical=String(official.title).split(/[|•]/)[0].trim();if(canonical&&canonical.toLocaleLowerCase('de-DE').includes(query.toLocaleLowerCase('de-DE')))p.name=canonical}}const card=document.createElement('section');card.className='draft';card.innerHTML='<h2>'+esc(p.name||d.query||'Entwurf')+'</h2><p class="muted">Recherche: '+esc(d.researched_at||p.researched_at||'Zeitpunkt unbekannt')+'</p><div class="results"></div><div class="grid">'+field('name','Unterkunftsname',p.name,'text')+field('town','Ort',p.town,'text')+field('address','Adresse',p.address,'text')+field('type','Art der Unterkunft',p.type,'text')+field('contact_email','E-Mail',p.contact_email,'email')+field('contact_phone','Telefon',p.contact_phone,'text')+field('website_url','Website',p.website_url,'url')+field('booking_url','Kontakt-/Buchungsseite',p.booking_url,'url')+field('description','Beschreibung und Hinweise',p.description,'textarea',true)+'</div><h2 style="margin-top:20px">Preisangebote</h2><p class="muted">Nur Werte eintragen, die du auf der verlinkten Originalquelle geprüft hast. Ohne bestätigten Preis bitte „Preis auf Anfrage“ wählen.</p><div class="price-list"></div><button class="add-price secondary">+ Preisangebot hinzufügen</button><p class="muted">Recherche-Status: '+(p.prices_verified?'als geprüft markiert':'Preise nicht bestätigt')+'. Bitte Preise und Verfügbarkeit selbst anhand der Originalquelle prüfen.</p><button class="prefill secondary">Quellenvorschläge übernehmen</button><button class="save">Entwurf speichern</button><button class="approve">Freigeben & veröffentlichen</button><button class="reject danger">Ablehnen</button><div class="status feedback">Bitte Angaben prüfen. Noch nicht veröffentlicht.</div>';card.dataset.id=d.id;card.dataset.payload=JSON.stringify(p);
 const res=card.querySelector('.results');const arr=Array.isArray(p.research_results)?p.research_results:[];if(!arr.length)res.innerHTML='<p class="muted">Keine Suchtreffer im Entwurf enthalten.</p>';else res.innerHTML=arr.map(x=>'<div class="result"><a href="'+esc(safeUrl(x.url))+'" target="_blank" rel="noopener noreferrer">'+esc(x.title||x.url||'Quelle öffnen')+'</a><p class="muted">'+esc(x.source_type||'Quelle – Zugehörigkeit prüfen')+'</p>'+(x.needs_identity_check?'<p class="status">Achtung: Der Treffer passt nicht eindeutig zum Suchnamen. Vor einer Übernahme Identität und Ort prüfen.</p>':'')+'<p class="muted">Namens-/Suchbegriff-Treffer: '+esc(x.match_count??'nicht bewertet')+'</p><p>'+esc(x.content||'Kein Textauszug vorhanden.')+'</p><p class="muted">'+esc(x.published_date||'')+'</p></div>').join('');
