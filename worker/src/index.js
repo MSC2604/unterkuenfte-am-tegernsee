@@ -18,6 +18,18 @@ function adminAuthorized(request, env) {
 function id() {
   return crypto.randomUUID();
 }
+async function ensureGalleryTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS price_offer_galleries (
+    price_offer_id TEXT PRIMARY KEY,
+    accommodation_id TEXT NOT NULL,
+    images_json TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+}
+function safeGalleryImages(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 4).filter(x => typeof x === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(x) && x.length <= 260000).map(x => x);
+}
 
 export default {
   async fetch(request, env) {
@@ -57,6 +69,7 @@ export default {
         ).bind(q, `%${q}%`, `%${q}%`, town, town, type, type).all();
         // If a valid stay is supplied, retain general offers and offers whose stated dates cover that stay.
         // This is a date relevance filter, not a guarantee of live availability.
+        await ensureGalleryTable(env);
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.valid_from, p.valid_to,
@@ -83,8 +96,12 @@ export default {
               )
             ORDER BY p.researched_at DESC`
         ).bind(hasValidStay ? 1 : 0, arrival, departure, arrival, departure).all();
+        const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
+        const galleryByOffer = new Map();
+        for (const gallery of galleries) { try { galleryByOffer.set(gallery.price_offer_id, JSON.parse(gallery.images_json || "[]")); } catch {} }
         const byAccommodation = new Map();
         for (const offer of offers.results) {
+          offer.gallery_images = galleryByOffer.get(offer.id) || [];
           if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
           byAccommodation.get(offer.accommodation_id).push(offer);
         }
@@ -197,20 +214,26 @@ export default {
         }, 201);
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
+        await ensureGalleryTable(env);
         const { results } = await env.DB.prepare(
           "SELECT id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url FROM accommodations WHERE published = 1 ORDER BY name COLLATE NOCASE"
         ).all();
         const { results: offers } = await env.DB.prepare(
           "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name FROM price_offers ORDER BY researched_at DESC"
         ).all();
+        const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
+        const galleryByOffer = new Map();
+        for (const gallery of galleries) { try { galleryByOffer.set(gallery.price_offer_id, JSON.parse(gallery.images_json || "[]")); } catch {} }
         const byAccommodation = new Map();
         for (const offer of offers) {
+          try { offer.gallery_images = galleryByOffer.get(offer.id) || []; } catch { offer.gallery_images = []; }
           if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
           byAccommodation.get(offer.accommodation_id).push(offer);
         }
         return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
       }
       if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/update$/.test(path)) {
+        await ensureGalleryTable(env);
         const accommodationId = path.split("/")[4];
         let body;
         try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
@@ -263,13 +286,16 @@ export default {
             sourceUrl.slice(0, 2000),
             (typeof price.source_name === "string" && price.source_name.trim() ? price.source_name.trim() : oldOffer?.source_name || "").slice(0, 300)
           ];
+          let targetOfferId;
           if (oldOffer) {
+            targetOfferId = oldOffer.id;
             retainedIds.add(oldOffer.id);
             batch.push(env.DB.prepare(
               "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_on_request = ?, source_url = ?, source_name = ? WHERE id = ? AND accommodation_id = ?"
             ).bind(...values, oldOffer.id, accommodationId));
           } else {
             const newId = id();
+            targetOfferId = newId;
             batch.push(env.DB.prepare(
               `INSERT INTO price_offers
                (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_on_request, source_url, source_name)
@@ -277,10 +303,15 @@ export default {
             ).bind(newId, accommodationId, ...values));
             retainedIds.add(newId);
           }
+          const galleryImages = safeGalleryImages(price.gallery_images);
+          batch.push(env.DB.prepare(
+            "INSERT INTO price_offer_galleries (price_offer_id, accommodation_id, images_json, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(price_offer_id) DO UPDATE SET accommodation_id = excluded.accommodation_id, images_json = excluded.images_json, updated_at = CURRENT_TIMESTAMP"
+          ).bind(targetOfferId, accommodationId, JSON.stringify(galleryImages)));
         }
         for (const oldOffer of existingOffers.results) {
           if (!retainedIds.has(oldOffer.id)) {
             batch.push(env.DB.prepare("DELETE FROM price_offers WHERE id = ? AND accommodation_id = ?").bind(oldOffer.id, accommodationId));
+            batch.push(env.DB.prepare("DELETE FROM price_offer_galleries WHERE price_offer_id = ? AND accommodation_id = ?").bind(oldOffer.id, accommodationId));
           }
         }
         await env.DB.batch(batch);
