@@ -105,6 +105,7 @@ export default {
         await ensureOccupancyColumn(env);
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
+        await ensureShowPriceAbColumn(env);
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.occupancy, p.valid_from, p.valid_to,
@@ -253,6 +254,7 @@ export default {
         await ensureOccupancyColumn(env);
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
+        await ensureShowPriceAbColumn(env);
         await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
           "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
@@ -426,6 +428,7 @@ export default {
         await ensureOccupancyColumn(env);
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
+        await ensureShowPriceAbColumn(env);
         const draftId = path.split("/")[4];
         const draft = await env.DB.prepare(
           "SELECT id, payload_json, source_urls_json FROM research_drafts WHERE id = ? AND status = 'pending'"
