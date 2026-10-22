@@ -201,7 +201,7 @@ export default {
         ).all();
         return json({ accommodations: results });
       }
-      if (request.method === "POST" && /^\\/api\\/admin\\/accommodations\\/[^/]+\\/delete$/.test(path)) {
+      if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/delete$/.test(path)) {
         const accommodationId = path.split("/")[4];
         const existing = await env.DB.prepare(
           "SELECT id, name FROM accommodations WHERE id = ? AND published = 1"
