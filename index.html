@@ -148,6 +148,35 @@ footer strong{color:var(--navy)}
  .result-actions{padding:11px 15px 14px}
 }
 
+
+/* Unterkunftskacheln mit Bild und ausklappbaren Details */
+.results-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.result-card{padding:0;overflow:hidden;border:1px solid #dfe6ef;border-radius:20px;background:#fff;box-shadow:0 8px 24px rgba(36,74,121,.08)}
+.result-photo{width:100%;height:190px;display:block;object-fit:cover;background:#e8eff8}
+.result-photo-placeholder{height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(145deg,#dce7f4,#f6f8fb);color:#244a79;text-align:center;padding:16px}
+.result-photo-placeholder .house-icon{font-size:48px;line-height:1}
+.result-photo-placeholder small{font-size:12px;color:#526985}
+.result-card-body{padding:16px}
+.result-card h3{margin:0;color:#203149;font-size:20px;line-height:1.25}
+.result-meta{color:#6d7887;font-size:13px;line-height:1.45;margin:6px 0 12px}
+.result-price{display:inline-flex;align-items:center;background:#e8eff8;color:#244a79;border-radius:10px;padding:7px 10px;font-size:16px;font-weight:800}
+.result-summary{font-size:13px;color:#526174;margin:11px 0 0;line-height:1.5}
+.result-details{display:none;border-top:1px solid #e7edf4;margin-top:14px;padding-top:12px}
+.result-card.expanded .result-details{display:block}
+.result-details h4{margin:12px 0 6px;color:#244a79;font-size:14px}
+.result-details .result-unit{margin:0;padding:10px 0;border-top:1px solid #edf1f6}
+.result-details .result-unit-row{display:flex;justify-content:space-between;gap:10px;align-items:start}
+.result-details .result-unit-row strong{font-size:13px}
+.result-details .result-note,.result-details small{font-size:12px;color:#6d7887;line-height:1.5}
+.result-details p{margin:6px 0}
+.result-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;padding:0;border:0;background:transparent}
+.result-actions a{flex:1 1 40%;text-align:center;text-decoration:none;border:1px solid #d4deeb;border-radius:11px;padding:9px 10px;font-size:13px;font-weight:700;color:#244a79;background:#fff}
+.result-actions a.primary{background:#244a79;border-color:#244a79;color:#fff}
+.details-toggle{width:100%;margin-top:13px;border:0;border-radius:12px;padding:11px 13px;background:#244a79;color:#fff;font:inherit;font-size:14px;font-weight:750;cursor:pointer}
+.details-toggle:focus-visible{outline:3px solid #9bb3d4;outline-offset:2px}
+@media(max-width:900px){.results-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.result-photo,.result-photo-placeholder{height:170px}}
+@media(max-width:600px){.results-grid{grid-template-columns:1fr;gap:14px}.result-photo,.result-photo-placeholder{height:210px}.result-card-body{padding:15px}}
+
 </style>
 </head>
 <body>
@@ -301,17 +330,32 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&
 function money(value,currency='EUR'){if(value===null||value===undefined||value==='')return 'Preis auf Anfrage';try{return new Intl.NumberFormat('de-DE',{style:'currency',currency}).format(Number(value))}catch{return String(value)+' '+currency}}
 function accommodationCard(a){
  const prices=Array.isArray(a.prices)?a.prices:[];
- const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined);
+ const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined&&p.price_amount!=='');
  const lowest=validPrices.length?Math.min(...validPrices.map(p=>Number(p.price_amount))):null;
- const lowestOffer=validPrices.find(p=>Number(p.price_amount)===lowest);const isStartingPrice=/ab[- ]?preis|^ab\b/i.test(String(lowestOffer?.season_label||''));const priceLine=lowest===null?'Preis auf Anfrage':(isStartingPrice?'Ab ':'')+money(lowest,lowestOffer?.currency||'EUR');
+ const lowestOffer=validPrices.find(p=>Number(p.price_amount)===lowest);
+ const isStartingPrice=/ab[- ]?preis|^ab\\b/i.test(String(lowestOffer?.season_label||''));
+ const priceLine=lowest===null?'Preis auf Anfrage':(isStartingPrice?'Ab ':'')+money(lowest,lowestOffer?.currency||'EUR');
+ const description=String(a.description||'');
+ const summary=description.length>125?description.slice(0,122).trimEnd()+'…':description;
+ const photo=typeof a.image_url==='string'&&/^https:\/\//i.test(a.image_url)?'<img class="result-photo" src="'+esc(a.image_url)+'" alt="Bild von '+esc(a.name)+'" loading="lazy" referrerpolicy="no-referrer">':'<div class="result-photo-placeholder" role="img" aria-label="Noch kein Unterkunftsfoto hinterlegt"><span class="house-icon" aria-hidden="true">⌂</span><strong>'+esc(a.type||'Unterkunft')+'</strong><small>Unterkunftsfoto folgt</small></div>';
  const details=prices.length?prices.map(p=>'<div class="result-unit"><div class="result-unit-row"><strong>'+esc(p.season_label||p.price_unit||'Preisangebot')+'</strong><strong class="result-price">'+(p.price_on_request?'Preis auf Anfrage':money(p.price_amount,p.currency||'EUR'))+'</strong></div><small>'+esc(p.price_unit||'')+(p.valid_from||p.valid_to?' · Gültigkeit: '+esc(p.valid_from||'offen')+' bis '+esc(p.valid_to||'offen'):' · Zeitraum nicht bestätigt')+'</small>'+(p.source_url?'<p class="result-note">Quelle: <a href="'+esc(p.source_url)+'" target="_blank" rel="noopener noreferrer">'+esc(p.source_name||'Originalquelle')+'</a></p>':'')+(p.additional_costs_note?'<p class="result-note">'+esc(p.additional_costs_note)+'</p>':'')+'</div>').join(''):'<p class="result-note">Noch keine veröffentlichten Preisangebote.</p>';
  const actions=[];
  if(a.contact_phone)actions.push('<a href="tel:'+esc(a.contact_phone)+'">Anrufen</a>');
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
  if(a.website_url)actions.push('<a class="primary" href="'+esc(a.website_url)+'" target="_blank" rel="noopener noreferrer">Website öffnen</a>');
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
- return '<article class="result-card"><div class="result-head"><div><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type,a.address].filter(Boolean).map(esc).join(' · ')+'</p></div><div class="result-price">'+priceLine+'</div></div>'+(a.description?'<p>'+esc(a.description)+'</p>':'')+'<h4>Preisangebote</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div></article>';
+ const extra=description?'<p>'+esc(description)+'</p>':'<p>Weitere Informationen zur Unterkunft sind noch nicht hinterlegt.</p>';
+ return '<article class="result-card">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">Details ansehen</button><div class="result-details"><h4>Über die Unterkunft</h4>'+extra+(a.address?'<p><strong>Adresse:</strong> '+esc(a.address)+'</p>':'')+'<h4>Preisangebote</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div></div></div></article>';
 }
+document.querySelector('#resultsGrid').addEventListener('click',event=>{
+ const button=event.target.closest('.details-toggle');
+ if(!button)return;
+ const card=button.closest('.result-card');
+ const expanded=card.classList.toggle('expanded');
+ button.setAttribute('aria-expanded',String(expanded));
+ button.textContent=expanded?'Details schließen':'Details ansehen';
+});
+
 async function loadAccommodations(){
  const params=new URLSearchParams();
  if(search.value.trim())params.set('q',search.value.trim());
