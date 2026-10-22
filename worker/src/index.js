@@ -28,7 +28,7 @@ async function ensureGalleryTable(env) {
 }
 function safeGalleryImages(value) {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 4).filter(x => typeof x === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(x) && x.length <= 260000).map(x => x);
+  return value.slice(0, 5).filter(x => typeof x === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(x) && x.length <= 260000).map(x => x);
 }
 
 export default {
