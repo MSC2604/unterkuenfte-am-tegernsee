@@ -10,10 +10,40 @@ const JSON_HEADERS = {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
-function adminAuthorized(request, env) {
-  const token = env.ADMIN_TOKEN;
-  if (!token) return false;
-  return request.headers.get("authorization") === `Bearer ${token}`;
+function b64urlEncode(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+}
+function b64urlDecode(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+  return Uint8Array.from(binary, c => c.charCodeAt(0));
+}
+async function sessionKey(env) {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(env.ADMIN_TOKEN), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+async function createAdminSession(env) {
+  const payload = b64urlEncode(new TextEncoder().encode(JSON.stringify({ exp: Date.now() + 2 * 60 * 60 * 1000 })));
+  const data = new TextEncoder().encode("s1." + payload);
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await sessionKey(env), data));
+  return "s1." + payload + "." + b64urlEncode(signature);
+}
+async function adminAuthorized(request, env) {
+  if (!env.ADMIN_TOKEN) return false;
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "s1") return false;
+  try {
+    const payloadBytes = b64urlDecode(parts[1]);
+    const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+    if (!Number.isFinite(payload.exp) || payload.exp <= Date.now()) return false;
+    const signed = new TextEncoder().encode(parts[0] + "." + parts[1]);
+    return await crypto.subtle.verify("HMAC", await sessionKey(env), b64urlDecode(parts[2]), signed);
+  } catch {
+    return false;
+  }
 }
 function id() {
   return crypto.randomUUID();
@@ -147,8 +177,15 @@ export default {
       }
     }
 
+    if (request.method === "POST" && path === "/api/admin/session") {
+      if (!env.ADMIN_TOKEN || request.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}`) {
+        return json({ error: "Admin-Token ist falsch." }, 401);
+      }
+      return json({ sessionToken: await createAdminSession(env), expiresInSeconds: 7200 });
+    }
+
     if (path.startsWith("/api/admin/")) {
-      if (!adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (!(await adminAuthorized(request, env))) return json({ error: "Sitzung ungültig oder abgelaufen. Bitte erneut anmelden." }, 401);
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
