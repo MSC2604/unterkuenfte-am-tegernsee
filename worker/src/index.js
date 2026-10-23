@@ -205,11 +205,13 @@ export default {
       if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
       try {
         await ensurePasskeyTables(env);
-        const { results } = await env.DB.prepare("SELECT credential_id, transports_json FROM passkey_credentials").all();
+        const { results } = await env.DB.prepare("SELECT credential_id FROM passkey_credentials").all();
         if (!results.length) return json({ error: "Noch kein Passkey eingerichtet. Bitte zuerst mit Admin-Token verbinden und einen Passkey registrieren." }, 409);
+        // Discoverable credentials: let the authenticator/provider find the matching passkey.
+        // This avoids restricting Android/Samsung Pass to an explicit credential allow-list.
         const options = await generateAuthenticationOptions({
           rpID: PASSKEY_RP_ID,
-          allowCredentials: results.map(c => ({ id: c.credential_id, transports: JSON.parse(c.transports_json || "[]") })),
+          allowCredentials: [],
           userVerification: "required"
         });
         const challengeId = await saveChallenge(env, "login", options.challenge);
