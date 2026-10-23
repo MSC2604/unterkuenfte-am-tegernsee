@@ -23,9 +23,8 @@ async function ensureAdminSessionsTable(env) {
   )`).run();
 }
 async function adminAuthorized(request, env) {
-  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!supplied) return false;
-  if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;
   try {
     await ensureAdminSessionsTable(env);
     const digest = await tokenDigest(supplied);
@@ -103,7 +102,7 @@ export default {
         const now = Math.floor(Date.now() / 1000);
         const sessionToken = `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
         const digest = await tokenDigest(sessionToken);
-        const expiresAt = now + 7200;
+        const expiresAt = now + 3600;
         await env.DB.prepare("INSERT INTO admin_sessions (token_hash, expires_at, created_at) VALUES (?, ?, ?)").bind(digest, expiresAt, now).run();
         return json({ token: sessionToken, expiresAt });
       } catch {
@@ -112,7 +111,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/session-logout") {
-      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
       if (supplied && env.ADMIN_TOKEN && supplied !== env.ADMIN_TOKEN) {
         try {
           await ensureAdminSessionsTable(env);

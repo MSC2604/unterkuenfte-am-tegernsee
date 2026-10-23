@@ -1,0 +1,63 @@
+name: Admin-Sitzung prüfen
+
+on:
+  push:
+    branches:
+      - admin-session-60min-safe
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "admin.html"
+      - "worker/**"
+      - ".github/workflows/check-admin-session.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: JavaScript-Syntax des Workers prüfen
+        run: node --check worker/src/index.js
+
+      - name: JavaScript aus admin.html syntaktisch prüfen
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("admin.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.S | re.I)
+          if not scripts:
+              raise SystemExit("Kein JavaScript-Block in admin.html gefunden")
+          Path("/tmp/admin-inline.js").write_text(scripts[-1], encoding="utf-8")
+          PY
+          node --check /tmp/admin-inline.js
+
+      - name: Sitzungsanforderungen prüfen
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          worker = Path("worker/src/index.js").read_text(encoding="utf-8")
+          admin = Path("admin.html").read_text(encoding="utf-8")
+          checks = {
+              "Serverseitige Laufzeit 60 Minuten": "const expiresAt = now + 3600;" in worker,
+              "Bearer-Header korrekt verarbeitet": worker.count(r'replace(/^Bearer\s+/i, "")') == 2,
+              "Master-Token umgeht Sitzungsprüfung nicht": 'if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;' not in worker,
+              "Abmelden-Button vorhanden": 'id="logout"' in admin and "$('logout').onclick=logout;" in admin,
+              "Countdown vorhanden": 'id="sessionTimer"' in admin and "function updateSessionTimer()" in admin,
+              "Automatische Abmeldung bei Ablauf": "if(!autoLogoutStarted){autoLogoutStarted=true;logout()}" in admin,
+              "Richtige Unterkunfts-API": "https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev" in admin,
+          }
+          for label, passed in checks.items():
+              print(("PASS" if passed else "FAIL") + " - " + label)
+          if not all(checks.values()):
+              raise SystemExit(1)
+          PY
+
+      - name: Sitzungsablauf mit simulierter D1-Datenbank testen
+        run: node --test worker/test-admin-session.mjs
