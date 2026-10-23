@@ -272,7 +272,7 @@ export default {
     }
 
     if (path.startsWith("/api/admin/")) {
-      if (!adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (!(await adminAuthorized(request, env))) return json({ error: "Nicht autorisiert." }, 401);
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
