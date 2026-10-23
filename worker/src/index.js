@@ -25,7 +25,6 @@ async function ensureAdminSessionsTable(env) {
 async function adminAuthorized(request, env) {
   const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!supplied) return false;
-  if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;
   try {
     await ensureAdminSessionsTable(env);
     const digest = await tokenDigest(supplied);
