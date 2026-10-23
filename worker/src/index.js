@@ -1,4 +1,3 @@
-import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 // Deployment trigger: no application logic or data changes.
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -11,42 +10,35 @@ const JSON_HEADERS = {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
+async function tokenDigest(token) {
+  const bytes = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
+}
+async function ensureAdminSessionsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`).run();
+}
 async function adminAuthorized(request, env) {
-  const auth = request.headers.get("authorization") || "";
-  const token = env.ADMIN_TOKEN;
-  if (token && auth === `Bearer ${token}`) return true;
-  const sessionToken = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!sessionToken) return false;
-  await ensurePasskeyTables(env);
-  const tokenHash = await hashToken(sessionToken);
-  const session = await env.DB.prepare("SELECT token_hash FROM passkey_sessions WHERE token_hash = ? AND expires_at > datetime('now')").bind(tokenHash).first();
-  return !!session;
-}
-const PASSKEY_RP_ID = "unterkuenfte-passkey-test-ui.pages.dev";
-const PASSKEY_ORIGIN = "https://unterkuenfte-passkey-test-ui.pages.dev";
-function passkeyOriginAllowed(request) {
-  return request.headers.get("origin") === PASSKEY_ORIGIN;
-}
-async function hashToken(value) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
-}
-async function ensurePasskeyTables(env) {
-  await env.DB.batch([
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS passkey_credentials (credential_id TEXT PRIMARY KEY, public_key TEXT NOT NULL, counter INTEGER NOT NULL DEFAULT 0, transports_json TEXT NOT NULL DEFAULT '[]', device_type TEXT, backed_up INTEGER NOT NULL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)"),
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS passkey_challenges (challenge_id TEXT PRIMARY KEY, challenge TEXT NOT NULL, purpose TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)"),
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS passkey_sessions (token_hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-  ]);
-}
-async function saveChallenge(env, purpose, challenge) {
-  const challengeId = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO passkey_challenges (challenge_id, challenge, purpose, expires_at) VALUES (?, ?, ?, datetime('now','+5 minutes'))").bind(challengeId, challenge, purpose).run();
-  return challengeId;
-}
-async function takeChallenge(env, challengeId, purpose) {
-  const row = await env.DB.prepare("SELECT challenge FROM passkey_challenges WHERE challenge_id = ? AND purpose = ? AND expires_at > datetime('now')").bind(challengeId, purpose).first();
-  await env.DB.prepare("DELETE FROM passkey_challenges WHERE challenge_id = ?").bind(challengeId).run();
-  return row?.challenge || null;
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  if (!supplied) return false;
+  if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;
+  try {
+    await ensureAdminSessionsTable(env);
+    const digest = await tokenDigest(supplied);
+    const now = Math.floor(Date.now() / 1000);
+    const row = await env.DB.prepare("SELECT expires_at FROM admin_sessions WHERE token_hash = ?").bind(digest).first();
+    if (!row || row.expires_at <= now) {
+      if (row) await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(digest).run();
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 function id() {
   return crypto.randomUUID();
@@ -99,6 +91,38 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: JSON_HEADERS });
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    if (request.method === "POST" && path === "/api/admin/session-login") {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
+      if (!env.ADMIN_TOKEN || typeof body.token !== "string" || body.token !== env.ADMIN_TOKEN) {
+        return json({ error: "Admin-Token stimmt nicht." }, 401);
+      }
+      try {
+        await ensureAdminSessionsTable(env);
+        const now = Math.floor(Date.now() / 1000);
+        const sessionToken = `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
+        const digest = await tokenDigest(sessionToken);
+        const expiresAt = now + 7200;
+        await env.DB.prepare("INSERT INTO admin_sessions (token_hash, expires_at, created_at) VALUES (?, ?, ?)").bind(digest, expiresAt, now).run();
+        return json({ token: sessionToken, expiresAt });
+      } catch {
+        return json({ error: "Anmeldung konnte nicht sicher gespeichert werden. Bitte später erneut versuchen." }, 503);
+      }
+    }
+
+    if (request.method === "POST" && path === "/api/admin/session-logout") {
+      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+      if (supplied && env.ADMIN_TOKEN && supplied !== env.ADMIN_TOKEN) {
+        try {
+          await ensureAdminSessionsTable(env);
+          await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(await tokenDigest(supplied)).run();
+        } catch {
+          return json({ error: "Abmeldung konnte serverseitig nicht bestätigt werden." }, 503);
+        }
+      }
+      return json({ ok: true });
+    }
 
     if (request.method === "GET" && path === "/api/health") {
       try {
@@ -180,158 +204,8 @@ export default {
       }
     }
 
-    // Read-only status endpoint for the isolated passkey test environment.
-    // Requires the test admin token and returns counts only, never credential material.
-    if (request.method === "GET" && path === "/api/admin/passkey/status") {
-      if (!(await adminAuthorized(request, env))) return json({ error: "Nicht autorisiert." }, 401);
-      try {
-        await ensurePasskeyTables(env);
-        const credentials = await env.DB.prepare("SELECT credential_id, public_key, counter, transports_json, device_type, backed_up FROM passkey_credentials").all();
-        const sessions = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_sessions WHERE expires_at > datetime('now')").first();
-        const challenges = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_challenges WHERE expires_at > datetime('now')").first();
-        const credentialChecks = (credentials.results || []).map(c => {
-          let transports = [];
-          try { transports = JSON.parse(c.transports_json || "[]"); } catch {}
-          return { publicKeyPresent: typeof c.public_key === "string" && c.public_key.length > 0, publicKeyLength: (c.public_key || "").length, credentialIdLength: (c.credential_id || "").length, counter: Number(c.counter || 0), transports, deviceType: c.device_type || null, backedUp: !!c.backed_up };
-        });
-        return json({ ok: true, credentials: credentialChecks.length, credentialChecks, activeSessions: sessions?.count || 0, activeChallenges: challenges?.count || 0, environment: "passkey-test-only" });
-      } catch {
-        return json({ error: "Test-Passkey-Status konnte nicht gelesen werden." }, 503);
-      }
-    }
-
-    // Admin sessions: exchange the existing admin token for a one-hour session.
-    if (request.method === "POST" && path === "/api/admin/session-login") {
-      const auth = request.headers.get("authorization") || "";
-      if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) {
-        return json({ error: "Admin-Token nicht korrekt." }, 401);
-      }
-      try {
-        await ensurePasskeyTables(env);
-        const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
-        const tokenHash = await hashToken(sessionToken);
-        await env.DB.prepare("INSERT INTO passkey_sessions (token_hash, expires_at) VALUES (?, datetime('now','+60 minutes'))").bind(tokenHash).run();
-        return json({ success: true, token: sessionToken, expiresIn: 3600 });
-      } catch {
-        return json({ error: "Sitzung konnte nicht angelegt werden." }, 503);
-      }
-    }
-
-    if (request.method === "POST" && path === "/api/admin/session-logout") {
-      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
-      if (!supplied) return json({ success: true });
-      try {
-        await ensurePasskeyTables(env);
-        const tokenHash = await hashToken(supplied);
-        await env.DB.prepare("DELETE FROM passkey_sessions WHERE token_hash = ?").bind(tokenHash).run();
-        return json({ success: true });
-      } catch {
-        return json({ error: "Sitzung konnte nicht beendet werden." }, 503);
-      }
-    }
-
-    // Passkey authentication endpoints. These only affect the new passkey tables.
-    if (request.method === "POST" && path === "/api/passkey/login-options") {
-      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
-      try {
-        await ensurePasskeyTables(env);
-        const { results } = await env.DB.prepare("SELECT credential_id FROM passkey_credentials").all();
-        if (!results.length) return json({ error: "Noch kein Passkey eingerichtet. Bitte zuerst mit Admin-Token verbinden und einen Passkey registrieren." }, 409);
-        // Discoverable credentials: let the authenticator/provider find the matching passkey.
-        // This avoids restricting Android/Samsung Pass to an explicit credential allow-list.
-        const options = await generateAuthenticationOptions({
-          rpID: PASSKEY_RP_ID,
-          allowCredentials: [],
-          userVerification: "required"
-        });
-        const challengeId = await saveChallenge(env, "login", options.challenge);
-        return json({ ...options, challengeId });
-      } catch (e) { return json({ error: "Passkey-Anmeldung konnte nicht vorbereitet werden." }, 500); }
-    }
-
-    if (request.method === "POST" && path === "/api/passkey/login-verify") {
-      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
-      try {
-        await ensurePasskeyTables(env);
-        const challenge = await takeChallenge(env, String(body.challengeId || ""), "login");
-        if (!challenge) return json({ error: "Anmeldeversuch abgelaufen. Bitte erneut versuchen." }, 400);
-        const credentialId = body.response?.id;
-        const stored = await env.DB.prepare("SELECT * FROM passkey_credentials WHERE credential_id = ?").bind(credentialId).first();
-        if (!stored) return json({ error: "Dieser Passkey ist nicht registriert." }, 401);
-        const verification = await verifyAuthenticationResponse({
-          response: body.response,
-          expectedChallenge: challenge,
-          expectedOrigin: PASSKEY_ORIGIN,
-          expectedRPID: PASSKEY_RP_ID,
-          requireUserVerification: true,
-          credential: {
-            id: stored.credential_id,
-            publicKey: Uint8Array.from(atob(stored.public_key), c => c.charCodeAt(0)),
-            counter: stored.counter,
-            transports: JSON.parse(stored.transports_json || "[]")
-          }
-        });
-        if (!verification.verified) return json({ error: "Passkey konnte nicht bestätigt werden." }, 401);
-        const info = verification.authenticationInfo;
-        await env.DB.prepare("UPDATE passkey_credentials SET counter = ? WHERE credential_id = ?").bind(info.newCounter, stored.credential_id).run();
-        const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2,"0")).join("");
-        const tokenHash = await hashToken(sessionToken);
-        await env.DB.prepare("INSERT INTO passkey_sessions (token_hash, expires_at) VALUES (?, datetime('now','+60 minutes'))").bind(tokenHash).run();
-        return json({ verified: true, token: sessionToken, expiresIn: 3600 });
-      } catch (e) { return json({ error: "Passkey-Prüfung fehlgeschlagen. Bitte erneut anmelden." }, 401); }
-    }
-
-    if (request.method === "POST" && path === "/api/admin/passkey/register-options") {
-      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
-      if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
-      try {
-        await ensurePasskeyTables(env);
-        const { results } = await env.DB.prepare("SELECT credential_id, transports_json FROM passkey_credentials").all();
-        const options = await generateRegistrationOptions({
-          rpName: "Unterkünfte am Tegernsee – Verwaltung",
-          rpID: PASSKEY_RP_ID,
-          userName: "Unterkunftsverwaltung",
-          userDisplayName: "Unterkünfte am Tegernsee",
-          attestationType: "none",
-          authenticatorSelection: { residentKey: "required", userVerification: "required", authenticatorAttachment: "platform" },
-          excludeCredentials: results.map(c => ({ id: c.credential_id, transports: JSON.parse(c.transports_json || "[]") })),
-          supportedAlgorithmIDs: [-7, -257]
-        });
-        const challengeId = await saveChallenge(env, "register", options.challenge);
-        return json({ ...options, challengeId });
-      } catch (e) { return json({ error: "Passkey-Registrierung konnte nicht vorbereitet werden." }, 500); }
-    }
-
-    if (request.method === "POST" && path === "/api/admin/passkey/register-verify") {
-      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
-      if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
-      try {
-        await ensurePasskeyTables(env);
-        const challenge = await takeChallenge(env, String(body.challengeId || ""), "register");
-        if (!challenge) return json({ error: "Registrierung abgelaufen. Bitte erneut versuchen." }, 400);
-        const verification = await verifyRegistrationResponse({
-          response: body.response,
-          expectedChallenge: challenge,
-          expectedOrigin: PASSKEY_ORIGIN,
-          expectedRPID: PASSKEY_RP_ID,
-          requireUserVerification: true
-        });
-        if (!verification.verified || !verification.registrationInfo) return json({ error: "Passkey konnte nicht bestätigt werden." }, 400);
-        const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-        const publicKey = btoa(String.fromCharCode(...credential.publicKey));
-        await env.DB.prepare("INSERT OR REPLACE INTO passkey_credentials (credential_id, public_key, counter, transports_json, device_type, backed_up) VALUES (?, ?, ?, ?, ?, ?)").bind(
-          credential.id, publicKey, credential.counter, JSON.stringify(credential.transports || []), credentialDeviceType, credentialBackedUp ? 1 : 0
-        ).run();
-        return json({ verified: true, message: "Passkey wurde registriert." }, 201);
-      } catch (e) { return json({ error: "Passkey-Registrierung fehlgeschlagen. Bitte erneut versuchen." }, 400); }
-    }
-
     if (path.startsWith("/api/admin/")) {
-      if (!(await adminAuthorized(request, env))) return json({ error: "Nicht autorisiert." }, 401);
+      if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
