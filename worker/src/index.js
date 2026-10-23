@@ -186,10 +186,15 @@ export default {
       if (!(await adminAuthorized(request, env))) return json({ error: "Nicht autorisiert." }, 401);
       try {
         await ensurePasskeyTables(env);
-        const credentials = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_credentials").first();
+        const credentials = await env.DB.prepare("SELECT credential_id, public_key, counter, transports_json, device_type, backed_up FROM passkey_credentials").all();
         const sessions = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_sessions WHERE expires_at > datetime('now')").first();
         const challenges = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_challenges WHERE expires_at > datetime('now')").first();
-        return json({ ok: true, credentials: credentials?.count || 0, activeSessions: sessions?.count || 0, activeChallenges: challenges?.count || 0, environment: "passkey-test-only" });
+        const credentialChecks = (credentials.results || []).map(c => {
+          let transports = [];
+          try { transports = JSON.parse(c.transports_json || "[]"); } catch {}
+          return { publicKeyPresent: typeof c.public_key === "string" && c.public_key.length > 0, publicKeyLength: (c.public_key || "").length, credentialIdLength: (c.credential_id || "").length, counter: Number(c.counter || 0), transports, deviceType: c.device_type || null, backedUp: !!c.backed_up };
+        });
+        return json({ ok: true, credentials: credentialChecks.length, credentialChecks, activeSessions: sessions?.count || 0, activeChallenges: challenges?.count || 0, environment: "passkey-test-only" });
       } catch {
         return json({ error: "Test-Passkey-Status konnte nicht gelesen werden." }, 503);
       }
