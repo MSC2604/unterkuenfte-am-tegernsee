@@ -1,0 +1,31 @@
+name: Passkey-Test prüfen
+
+on:
+  push:
+    branches: ["passkey-vorbereitung"]
+    paths:
+      - "worker/**"
+      - "admin.html"
+      - ".github/workflows/passkey-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    name: Worker-Build prüfen (ohne Veröffentlichung)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Abhängigkeiten installieren
+        working-directory: worker
+        run: npm install
+      - name: Worker nur prüfen, nicht veröffentlichen
+        working-directory: worker
+        run: npx wrangler deploy --dry-run
