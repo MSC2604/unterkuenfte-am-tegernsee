@@ -32,3 +32,6 @@ jobs:
           grep -F 'const expiresAt = now + 3600;' worker/src/index.js
           grep -F 'id="logout"' admin.html
           grep -F 'id="sessionTimer"' admin.html
+          grep -F 'replace(/^Bearer\\s+/i, "")' worker/src/index.js
+          grep -F "const response=await fetch(apiBase+'/api/admin/session-logout'" admin.html
+          grep -F 'keepalive:true' admin.html
