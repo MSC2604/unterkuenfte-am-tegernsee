@@ -58,10 +58,10 @@ button.danger{background:#8a3434}
 <main>
 <section class="panel">
 <h2>1. Verbindung</h2>
-<p class="muted">Einmal mit deinem bisherigen Admin-Token anmelden. Die Sitzung endet spätestens nach 2 Stunden. Mit „Abmelden“ kannst du sie jederzeit beenden.</p>
+<p class="muted">Einmal mit deinem bisherigen Admin-Token anmelden. Die Sitzung endet nach 60 Minuten. Die verbleibende Zeit wird neben „Abmelden“ angezeigt. Du kannst dich jederzeit selbst abmelden.</p>
 <label for="api">Worker-Adresse</label><input id="api" value="https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev" autocomplete="url">
 <label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="Nur bei neuer Anmeldung erforderlich">
-<button id="connect">Anmelden / Verwaltung laden</button><button id="logout" class="secondary" type="button">Abmelden</button><button id="newSearch" class="secondary">Neue Webrecherche</button>
+<button id="connect">Anmelden / Verwaltung laden</button><button id="logout" class="secondary" type="button">Abmelden</button><span id="sessionTimer" class="pill" aria-live="polite">Nicht angemeldet</span><button id="newSearch" class="secondary">Neue Webrecherche</button>
 <div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
 <div id="searchBox" class="hidden"><label for="query">Unterkunftsname oder Link von Tegernsee.com</label><input id="query" placeholder="Name oder https://www.tegernsee.com/..."><button id="runSearch">Recherche starten</button><p class="muted">Sucht ohne feste Personenzahl nach dem Gastgeber und möglichen Einheiten. Bis zu 8 unterschiedliche Treffer werden als Entwurf gesammelt. Preise und Verfügbarkeit sind dadurch nicht bestätigt.</p></div>
 </section>
@@ -69,15 +69,17 @@ button.danger{background:#8a3434}
 </main>
 <script>
 const $=id=>document.getElementById(id);
-let drafts=[], published=[], selected=null, sessionToken='', sessionExpiresAt=0;
+let drafts=[], published=[], selected=null, sessionToken='', sessionExpiresAt=0, sessionTimerInterval=null, autoLogoutStarted=false;
 const SESSION_KEY='unterkuenfte_admin_session_v1';
 function base(){return $('api').value.trim().replace(/\/+$/,'')}
 function headers(){return {'Authorization':'Bearer '+sessionToken,'Content-Type':'application/json'}}
 function status(s){$('status').textContent=s}
-function clearSession(){sessionToken='';sessionExpiresAt=0;try{localStorage.removeItem(SESSION_KEY)}catch{}}
-function restoreSession(){try{const saved=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(saved&&saved.token&&Number(saved.expiresAt)>Date.now()){sessionToken=saved.token;sessionExpiresAt=Number(saved.expiresAt);return true}}catch{}clearSession();return false}
+function clearSession(){if(sessionTimerInterval){clearInterval(sessionTimerInterval);sessionTimerInterval=null}sessionToken='';sessionExpiresAt=0;try{localStorage.removeItem(SESSION_KEY)}catch{}$('sessionTimer').textContent='Nicht angemeldet'}
+function updateSessionTimer(){if(!sessionToken||!sessionExpiresAt){$('sessionTimer').textContent='Nicht angemeldet';return}const remaining=Math.max(0,Math.ceil((sessionExpiresAt-Date.now())/1000));if(remaining<=0){$('sessionTimer').textContent='Sitzung läuft ab …';if(sessionTimerInterval){clearInterval(sessionTimerInterval);sessionTimerInterval=null}if(!autoLogoutStarted){autoLogoutStarted=true;logout()}return}const minutes=Math.floor(remaining/60),seconds=remaining%60;$('sessionTimer').textContent='Noch '+String(minutes).padStart(2,'0')+':'+String(seconds).padStart(2,'0')}
+function startSessionTimer(){if(sessionTimerInterval)clearInterval(sessionTimerInterval);autoLogoutStarted=false;updateSessionTimer();if(sessionToken)sessionTimerInterval=setInterval(updateSessionTimer,1000)}
+function restoreSession(){try{const saved=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(saved&&saved.token&&Number(saved.expiresAt)>Date.now()){sessionToken=saved.token;sessionExpiresAt=Number(saved.expiresAt);startSessionTimer();return true}}catch{}clearSession();return false}
 async function api(path,opts={}){if(!sessionToken||Date.now()>=sessionExpiresAt){clearSession();throw new Error('Deine Anmeldung ist abgelaufen. Bitte erneut anmelden.')}const r=await fetch(base()+path,{...opts,headers:{...headers(),...(opts.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok){if(r.status===401||r.status===403){clearSession();throw new Error('Anmeldung abgelaufen. Bitte erneut anmelden.')}throw new Error(d.error||('HTTP '+r.status))}return d}
-async function login(){const token=$('token').value.trim();if(!token){status('Bitte dein bisheriges Admin-Token eingeben.');return}try{status('Anmeldung wird geprüft …');const r=await fetch(base()+'/api/admin/session-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||'Anmeldung fehlgeschlagen.');sessionToken=d.token;sessionExpiresAt=Number(d.expiresAt)*1000;try{localStorage.setItem(SESSION_KEY,JSON.stringify({token:sessionToken,expiresAt:sessionExpiresAt}))}catch{}$('token').value='';await load()}catch(e){status('Anmeldung fehlgeschlagen: '+e.message)}}
+async function login(){const token=$('token').value.trim();if(!token){status('Bitte dein bisheriges Admin-Token eingeben.');return}try{status('Anmeldung wird geprüft …');const r=await fetch(base()+'/api/admin/session-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||'Anmeldung fehlgeschlagen.');sessionToken=d.token;sessionExpiresAt=Number(d.expiresAt)*1000;try{localStorage.setItem(SESSION_KEY,JSON.stringify({token:sessionToken,expiresAt:sessionExpiresAt}))}catch{}startSessionTimer();$('token').value='';await load()}catch(e){status('Anmeldung fehlgeschlagen: '+e.message)}}
 async function logout(){const oldToken=sessionToken;try{if(oldToken){await fetch(base()+'/api/admin/session-logout',{method:'POST',headers:{'Authorization':'Bearer '+oldToken,'Content-Type':'application/json'},body:'{}'})}}catch{}clearSession();drafts=[];published=[];$('drafts').innerHTML='';$('published').innerHTML='';$('searchBox').classList.add('hidden');status('Du bist abgemeldet.');$('token').value='';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setupAccommodationImageTools(container, initialImage, onChange){
