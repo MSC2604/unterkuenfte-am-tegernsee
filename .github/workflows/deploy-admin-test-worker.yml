@@ -1,0 +1,37 @@
+name: Test-Worker für Admin-Sitzung bereitstellen
+
+on:
+  push:
+    branches: ["anmeldung-60min-test"]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-admin-test-worker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unterkuenfte-admin-test-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy-test:
+    name: Separaten Test-Worker veröffentlichen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: Sicherheitsprüfung der Testkonfiguration
+        run: |
+          grep -F 'name = "unterkuenfte-admin-test-api"' worker/wrangler.toml
+          grep -F 'database_name = "unterkuenfte-session-test"' worker/wrangler.toml
+          grep -F 'database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"' worker/wrangler.toml
+          ! grep -F 'd7bdc69e-4610-402f-9154-0c0e13f46022' worker/wrangler.toml
+          ! grep -F 'unterkuenfte-am-tegernsee-api' worker/wrangler.toml
+      - name: Test-Worker veröffentlichen
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
