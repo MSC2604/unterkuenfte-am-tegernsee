@@ -22,8 +22,8 @@ async function adminAuthorized(request, env) {
   const session = await env.DB.prepare("SELECT token_hash FROM passkey_sessions WHERE token_hash = ? AND expires_at > datetime('now')").bind(tokenHash).first();
   return !!session;
 }
-const PASSKEY_RP_ID = "msc2604.github.io";
-const PASSKEY_ORIGIN = "https://msc2604.github.io";
+const PASSKEY_RP_ID = "unterkuenfte-passkey-test-ui.pages.dev";
+const PASSKEY_ORIGIN = "https://unterkuenfte-passkey-test-ui.pages.dev";
 function passkeyOriginAllowed(request) {
   return request.headers.get("origin") === PASSKEY_ORIGIN;
 }
