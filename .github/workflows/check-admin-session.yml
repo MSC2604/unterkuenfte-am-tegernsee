@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - "admin.html"
-      - "worker/src/index.js"
+      - "worker/**"
       - ".github/workflows/check-admin-session.yml"
 
 permissions:
@@ -58,3 +58,6 @@ jobs:
           if not all(checks.values()):
               raise SystemExit(1)
           PY
+
+      - name: Sitzungsablauf mit simulierter D1-Datenbank testen
+        run: node --test worker/test-admin-session.mjs
