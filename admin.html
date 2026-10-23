@@ -158,7 +158,64 @@ function renderPublished(){
   root.appendChild(card)
  })
 }
-function inferredFields(p){const arr=Array.isArray(p.research_results)?p.research_results:[];const all=arr.map(x=>String(x.content||'')).join(' ');const official=arr.find(x=>{try{const h=new URL(x.url).hostname.toLowerCase();return (h==='tegernsee.com'||h.endsWith('.tegernsee.com'))&&/lukashof/i.test((x.title||'')+' '+(x.content||''))}catch{return false}})||arr.find(x=>/lukashof/i.test((x.title||'')+' '+(x.content||'')));if(!official)return {};const out={};if(!p.name){const title=String(official.title||'').trim();out.name=/^ferienwohnungen lukashof$/i.test(title)?'Ferienwohnungen Lukashof':(title.match(/^(Ferienwohnungen\s+[^|•–-]+)/i)?.[1]?.trim()||title||'Ferienwohnungen Lukashof');}if(!p.town&&/Rottach-Egern/i.test(all))out.town='Rottach-Egern';if(!p.address&&/Brandstatt\s*1[,\s]+83700\s+Rottach-Egern/i.test(all))out.address='Brandstatt 1, 83700 Rottach-Egern';if(!p.type&&/drei Ferienwohnungen|Ferienwohnungen Lukashof/i.test(all))out.type='Ferienwohnungen';if(!p.contact_email){const m=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);if(m)out.contact_email=m[0]}if(!p.contact_phone&&/(?:\+49[-\s]?\(?0?\)?[-\s]?|0)8022[-\s]?670[-\s]?774/i.test(all))out.contact_phone='+49 8022 670774';if(!p.description&&/drei Ferienwohnungen/i.test(all))out.description='Drei Ferienwohnungen auf einem Bauernhof etwa drei Kilometer außerhalb von Rottach-Egern. Balkon, separates Schlafzimmer und Küche; WLAN, Kabel-TV, Spielplatz und Parkplätze laut Gastgeberverzeichnis.';return out}
+function inferredFields(p){
+ const arr=Array.isArray(p.research_results)?p.research_results:[];
+ const all=arr.map(x=>String(x.content||'')).join('\n');
+ const preferred=arr.find(x=>!x.needs_identity_check&&/Tegernsee.com – Gastgeberquelle|Mögliche Gastgeber- oder Buchungsseite/.test(x.source_type||'')&&String(x.content||'').length>100)
+   ||arr.find(x=>!x.needs_identity_check&&String(x.content||'').length>100)
+   ||arr.find(x=>!x.needs_identity_check);
+ const sourceText=String(preferred?.content||'');
+ const out={};
+ const clean=s=>String(s||'').replace(/\s+/g,' ').trim();
+ if(!p.name&&preferred?.title){
+   const title=clean(preferred.title).split(/[|•]/)[0].trim();
+   if(title&&title.length<120)out.name=title;
+ }
+ if(!p.contact_email){
+   const m=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+   if(m&&!/example\.|\.png$|\.jpg$/i.test(m[0]))out.contact_email=m[0];
+ }
+ if(!p.contact_phone){
+   const matches=all.match(/(?:\+49|0049|0)[\s()./-]*(?:\d[\s()./-]*){7,}/g)||[];
+   const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
+   if(phone)out.contact_phone=phone.raw;
+ }
+ const postal=all.match(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45})/);
+ if(postal){
+   const town=clean(postal[2]).split(/\s+(?:Telefon|Tel\.?|E-?Mail|Fax|Öffnungszeiten)\b/i)[0].replace(/[.,;:]+$/,'');
+   if(!p.town&&town&&town.length<45)out.town=town;
+ }
+ if(!p.address){
+   const lines=all.split(/[\r\n]+/).map(clean).filter(Boolean);
+   const street=lines.find(line=>line.length<140&&/\b(?:straße|str\.|weg|platz|gasse|berg|rain|feld|hof|straße|chaussee|ufer)\b/i.test(line)&&/\b\d{1,4}[a-z]?\b/i.test(line));
+   const postalLine=lines.find(line=>/\b\d{5}\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}/.test(line));
+   if(street&&postalLine)out.address=clean(street+', '+postalLine);
+   else if(postalLine)out.address=clean(postalLine);
+   else if(street)out.address=street;
+ }
+ if(!p.type){
+   const text=all.toLocaleLowerCase('de-DE');
+   const types=[['Ferienwohnungen',/ferienwohnungen|ferienwohnung/],['Ferienhaus',/ferienhaus|ferienhäuser/],['Hotel',/hotel|garni/],['Pension',/pension/],['Gasthof',/gasthof/],['Gasthaus',/gasthaus/],['Gästehaus',/gästehaus|gaestehaus/],['Privatzimmer',/privatzimmer|zimmervermietung/],['Bauernhof',/bauernhof|urlaub auf dem bauernhof/],['Campingplatz',/campingplatz|camping/]];
+   const found=types.find(([,re])=>re.test(text));if(found)out.type=found[0];
+ }
+ if(!p.website_url){
+   const candidate=arr.find(x=>!x.needs_identity_check&&/Mögliche Gastgeber- oder Buchungsseite/.test(x.source_type||'')&&x.url);
+   if(candidate){
+     try{const u=new URL(candidate.url);if(!/(tegernsee\.com|bayregio\.de|booking\.com|airbnb\.|tripadvisor\.)$/i.test(u.hostname))out.website_url=u.href}catch{}
+   }
+ }
+ if(!p.booking_url){
+   const candidate=arr.find(x=>x.url&&/(booking\.com|airbnb\.|fewo-direkt|e-domizil|traum-ferienwohnungen)/i.test(x.url));
+   if(candidate)out.booking_url=candidate.url;
+ }
+ if(!p.description&&sourceText.length>250){
+   const text=clean(sourceText.replace(/https?:\/\/\S+/g,'').replace(/\b(?:Cookie-Einstellungen|Datenschutz|Impressum|Navigation überspringen)\b/gi,''));
+   const sentences=text.split(/(?<=[.!?])\s+/).filter(s=>s.length>45&&s.length<300&&!/^(Startseite|Menü|Kontakt|Impressum|Datenschutz)/i.test(s));
+   const description=sentences.slice(0,3).join(' ').slice(0,650).trim();
+   if(description.length>=90)out.description=description;
+ }
+ return out;
+}
 function prefill(card){const p=JSON.parse(card.dataset.payload||'{}');const guessed=inferredFields(p);let changed=0;for(const [key,value] of Object.entries(guessed)){const el=card.querySelector('[data-key="'+key+'"]');if(el&&!el.value.trim()){el.value=value;changed++}}let addedPrices=0;const priceList=card.querySelector('.price-list');const results=Array.isArray(p.research_results)?p.research_results:[];const official=results.find(x=>{try{const host=new URL(x.url).hostname.toLowerCase();return (host==='tegernsee.com'||host.endsWith('.tegernsee.com'))&&/ferienwohnungen lukashof/i.test((x.title||'')+' '+(x.content||''))}catch{return false}});if(priceList&&official){const body=String(official.content||'');const units=[...body.matchAll(/Ferienwohnung\s+(I{1,3}|IV)\b/gi)];for(const unit of units){const label='Ferienwohnung '+unit[1].toUpperCase();const before=body.slice(Math.max(0,unit.index-220),unit.index);const pricePattern=/(?:Ab\s*)?(\d{2,4})[.,](\d{2})\s*€/gi;const candidates=[...before.matchAll(pricePattern)].map(m=>({m,idx:m.index})).filter(x=>/pro\s*Einheit/i.test(before.slice(x.idx,Math.min(before.length,x.idx+90))));const chosen=candidates[candidates.length-1];if(!chosen)continue;const amount=Number(chosen.m[1]+'.'+chosen.m[2]);const exists=Array.from(priceList.querySelectorAll('.price-card')).some(row=>row.querySelector('[data-price-key="price_amount"]')?.value===String(amount)&&row.querySelector('[data-price-key="season_label"]')?.value.toLowerCase().includes(label.toLowerCase())&&row.querySelector('[data-price-key="source_url"]')?.value===official.url);if(exists)continue;priceList.appendChild(makePriceRow({price_amount:amount,price_unit:'pro Einheit',season_label:label+' · Ab-Preis',source_name:official.title||'Tegernsee.com',source_url:official.url,additional_costs_note:'Ausgewiesener Ab-Preis laut Originalquelle. Reisezeitraum, Saison und Verfügbarkeit sind nicht bestätigt.'}));addedPrices++}}const messages=[];if(changed)messages.push(changed+' leere Unterkunftsfelder ergänzt.');if(addedPrices)messages.push(addedPrices+' Ab-Preisangebote aus der offiziellen Quelle übernommen.');if(!messages.length)messages.push('Keine neuen Felder oder Preisangebote ergänzt.');card.querySelector('.feedback').textContent=messages.join(' ')+' Bitte prüfen und danach „Entwurf speichern“ wählen.'}
 function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
 function selectField(key,label,value){const options=['Ferienwohnung','Ferienwohnungen','Ferienhaus','Hotel','Pension','Gasthof','Gasthaus','Gästehaus','Privatzimmer','Bauernhof','Campingplatz','Hostel','Sonstiges'];const current=String(value||'');if(current&&!options.includes(current))options.unshift(current);return '<div><label>'+label+'</label><select data-key="'+key+'"><option value="">Bitte auswählen</option>'+options.map(option=>'<option value="'+esc(option)+'" '+(current===option?'selected':'')+'>'+esc(option)+'</option>')+'</select></div>'}
