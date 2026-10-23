@@ -1,0 +1,41 @@
+name: Passkey-Testworker bereitstellen
+
+on:
+  push:
+    branches: ["passkey-vorbereitung"]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-passkey-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: passkey-testworker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-test-only:
+    if: github.ref == 'refs/heads/passkey-vorbereitung'
+    name: Nur den separaten Passkey-Testworker bereitstellen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: passkey-vorbereitung
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Worker-Abhängigkeiten installieren
+        working-directory: worker
+        run: npm install
+      - name: Testworker veröffentlichen
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
