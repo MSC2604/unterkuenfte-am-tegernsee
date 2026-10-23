@@ -227,7 +227,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/passkey/register-options") {
-      if (!adminAuthorized(request, env)) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
+      if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
       try {
         await ensurePasskeyTables(env);
         const { results } = await env.DB.prepare("SELECT credential_id, transports_json FROM passkey_credentials").all();
