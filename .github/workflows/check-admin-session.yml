@@ -1,0 +1,34 @@
+name: Admin-Sitzung prüfen
+
+on:
+  push:
+    branches: ["anmeldung-60min-test"]
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: JavaScript-Syntax prüfen
+        run: |
+          cp worker/src/index.js /tmp/worker-check.mjs
+          node --check /tmp/worker-check.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("admin.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S | re.I)
+          if not scripts:
+              raise SystemExit("Kein Inline-Script in admin.html gefunden.")
+          Path("/tmp/admin-check.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/admin-check.js
+      - name: Sitzungsgrenze und Abmelde-Button prüfen
+        run: |
+          grep -F 'const expiresAt = now + 3600;' worker/src/index.js
+          grep -F 'id="logout"' admin.html
+          grep -F 'id="sessionTimer"' admin.html
