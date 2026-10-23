@@ -1,7 +1,11 @@
 name: Passkey-Testworker bereitstellen
 
 on:
-  workflow_dispatch:
+  push:
+    branches: ["passkey-vorbereitung"]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-passkey-test.yml"
 
 permissions:
   contents: read
