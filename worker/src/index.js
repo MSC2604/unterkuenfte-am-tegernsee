@@ -24,6 +24,9 @@ async function adminAuthorized(request, env) {
 }
 const PASSKEY_RP_ID = "msc2604.github.io";
 const PASSKEY_ORIGIN = "https://msc2604.github.io";
+function passkeyOriginAllowed(request) {
+  return request.headers.get("origin") === PASSKEY_ORIGIN;
+}
 async function hashToken(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
@@ -179,6 +182,7 @@ export default {
 
     // Passkey authentication endpoints. These only affect the new passkey tables.
     if (request.method === "POST" && path === "/api/passkey/login-options") {
+      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
       try {
         await ensurePasskeyTables(env);
         const { results } = await env.DB.prepare("SELECT credential_id, transports_json FROM passkey_credentials").all();
@@ -194,6 +198,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/passkey/login-verify") {
+      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
       let body;
       try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
       try {
@@ -227,6 +232,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/passkey/register-options") {
+      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
       if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
       try {
         await ensurePasskeyTables(env);
@@ -247,6 +253,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/passkey/register-verify") {
+      if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
       if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
       let body;
       try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
