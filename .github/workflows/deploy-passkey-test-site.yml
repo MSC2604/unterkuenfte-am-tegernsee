@@ -1,0 +1,40 @@
+name: Passkey-Testseite bereitstellen
+
+on:
+  push:
+    branches: ["passkey-vorbereitung"]
+    paths:
+      - "passkey-test-site/**"
+      - ".github/workflows/deploy-passkey-test-site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: passkey-testsite-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-test-site:
+    if: github.ref == 'refs/heads/passkey-vorbereitung'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test-Branch auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: passkey-vorbereitung
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cloudflare Pages-Testprojekt anlegen (falls noch nicht vorhanden)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler pages project create unterkuenfte-passkey-test-ui --production-branch passkey-vorbereitung || true
+      - name: Ausschließlich die Testseite veröffentlichen
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy passkey-test-site --project-name unterkuenfte-passkey-test-ui
