@@ -540,6 +540,9 @@ export default {
         return json({ success: true, accommodation_id: accommodationId, prices_saved: prices.length });
       }
     }
+    if (!path.startsWith("/api/") && env.ASSETS && (request.method === "GET" || request.method === "HEAD")) {
+      return env.ASSETS.fetch(request);
+    }
     return json({ error: "Nicht gefunden." }, 404);
   }
 };
