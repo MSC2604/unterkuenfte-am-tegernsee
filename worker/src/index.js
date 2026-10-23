@@ -200,6 +200,36 @@ export default {
       }
     }
 
+    // Admin sessions: exchange the existing admin token for a one-hour session.
+    if (request.method === "POST" && path === "/api/admin/session-login") {
+      const auth = request.headers.get("authorization") || "";
+      if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) {
+        return json({ error: "Admin-Token nicht korrekt." }, 401);
+      }
+      try {
+        await ensurePasskeyTables(env);
+        const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+        const tokenHash = await hashToken(sessionToken);
+        await env.DB.prepare("INSERT INTO passkey_sessions (token_hash, expires_at) VALUES (?, datetime('now','+60 minutes'))").bind(tokenHash).run();
+        return json({ success: true, token: sessionToken, expiresIn: 3600 });
+      } catch {
+        return json({ error: "Sitzung konnte nicht angelegt werden." }, 503);
+      }
+    }
+
+    if (request.method === "POST" && path === "/api/admin/session-logout") {
+      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+      if (!supplied) return json({ success: true });
+      try {
+        await ensurePasskeyTables(env);
+        const tokenHash = await hashToken(supplied);
+        await env.DB.prepare("DELETE FROM passkey_sessions WHERE token_hash = ?").bind(tokenHash).run();
+        return json({ success: true });
+      } catch {
+        return json({ error: "Sitzung konnte nicht beendet werden." }, 503);
+      }
+    }
+
     // Passkey authentication endpoints. These only affect the new passkey tables.
     if (request.method === "POST" && path === "/api/passkey/login-options") {
       if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
@@ -248,8 +278,8 @@ export default {
         await env.DB.prepare("UPDATE passkey_credentials SET counter = ? WHERE credential_id = ?").bind(info.newCounter, stored.credential_id).run();
         const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2,"0")).join("");
         const tokenHash = await hashToken(sessionToken);
-        await env.DB.prepare("INSERT INTO passkey_sessions (token_hash, expires_at) VALUES (?, datetime('now','+12 hours'))").bind(tokenHash).run();
-        return json({ verified: true, token: sessionToken, expiresIn: 43200 });
+        await env.DB.prepare("INSERT INTO passkey_sessions (token_hash, expires_at) VALUES (?, datetime('now','+60 minutes'))").bind(tokenHash).run();
+        return json({ verified: true, token: sessionToken, expiresIn: 3600 });
       } catch (e) { return json({ error: "Passkey-Prüfung fehlgeschlagen. Bitte erneut anmelden." }, 401); }
     }
 
