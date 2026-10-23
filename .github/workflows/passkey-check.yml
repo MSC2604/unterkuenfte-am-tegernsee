@@ -7,6 +7,7 @@ on:
       - "worker/**"
       - "admin.html"
       - ".github/workflows/passkey-check.yml"
+      - ".github/workflows/deploy-passkey-test.yml"
   workflow_dispatch:
 
 permissions:
