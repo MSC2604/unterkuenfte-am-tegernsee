@@ -200,27 +200,6 @@ export default {
       }
     }
 
-    // Explicit reset for the isolated passkey test environment only.
-    // Requires the test ADMIN_TOKEN; production accommodation data is never touched.
-    if (request.method === "POST" && path === "/api/admin/passkey/reset-test-credentials") {
-      const auth = request.headers.get("authorization") || "";
-      if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: "Nur mit dem Test-Admin-Token erlaubt." }, 401);
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
-      if (body.confirm !== "RESET_PASSKEY_TEST_ONLY") return json({ error: "Bestätigung fehlt." }, 400);
-      try {
-        await ensurePasskeyTables(env);
-        await env.DB.batch([
-          env.DB.prepare("DELETE FROM passkey_sessions"),
-          env.DB.prepare("DELETE FROM passkey_challenges"),
-          env.DB.prepare("DELETE FROM passkey_credentials")
-        ]);
-        return json({ ok: true, message: "Nur Passkey-Testdaten zurückgesetzt. Unterkunftsdaten wurden nicht verändert." });
-      } catch {
-        return json({ error: "Test-Passkey-Daten konnten nicht zurückgesetzt werden." }, 503);
-      }
-    }
-
     // Passkey authentication endpoints. These only affect the new passkey tables.
     if (request.method === "POST" && path === "/api/passkey/login-options") {
       if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
