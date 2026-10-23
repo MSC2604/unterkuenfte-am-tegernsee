@@ -1,0 +1,49 @@
+name: Admin-Sitzung prüfen
+
+on:
+  push:
+    branches: ["anmeldung-60min-test"]
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: JavaScript-Syntax prüfen
+        run: |
+          cp worker/src/index.js /tmp/worker-check.mjs
+          node --check /tmp/worker-check.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("admin.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S | re.I)
+          if not scripts:
+              raise SystemExit("Kein Inline-Script in admin.html gefunden.")
+          Path("/tmp/admin-check.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/admin-check.js
+      - name: Sitzungsgrenze, Abmelden und Produktionsschutz prüfen
+        run: |
+          grep -F 'const expiresAt = now + 3600;' worker/src/index.js
+          grep -F 'id="logout"' admin.html
+          grep -F 'id="sessionTimer"' admin.html
+          grep -F 'value="https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev"' admin.html
+          grep -F 'replace(/^Bearer\s+/i, "")' worker/src/index.js
+          grep -F "const response=await fetch(apiBase+'/api/admin/session-logout'" admin.html
+          grep -F 'keepalive:true' admin.html
+          grep -F 'name = "unterkuenfte-am-tegernsee-api"' worker/wrangler.toml
+          grep -F 'database_name = "unterkuenfte-am-tegernsee"' worker/wrangler.toml
+          grep -F 'database_id = "d7bdc69e-4610-402f-9154-0c0e13f46022"' worker/wrangler.toml
+          grep -F 'name = "unterkuenfte-admin-test-api"' worker/wrangler.test.toml
+          ! grep -F 'd7bdc69e-4610-402f-9154-0c0e13f46022' worker/wrangler.test.toml
+          grep -F 'database_name = "unterkuenfte-session-test"' worker/wrangler.test.toml
+          grep -F 'database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"' worker/wrangler.test.toml
+          grep -F 'if (!row || row.expires_at <= now)' worker/src/index.js
+          grep -F 'if(remaining<=0)' worker/public/index.html
+          grep -F 'Date.now()>=sessionExpiresAt' worker/public/index.html
+          grep -F 'function restoreSession()' worker/public/index.html
