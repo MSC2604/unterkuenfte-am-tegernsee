@@ -275,16 +275,47 @@ export default {
         const directMatches = scored.filter(x => x.titleMatchCount > 0 || x.officialTegernsee && x.matchCount > 0);
         const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.officialTegernsee || x.matchCount >= Math.min(2, terms.length)));
         const results = (directMatches.length ? relevant : scored.filter(x => !x.unrelated)).slice(0, 8);
-        const sources = results.map(x => x.item.url).slice(0, 8);
-        const researchResults = results.map(({ item, host, matchCount, officialTegernsee, likelyHostSite, unrelated }) => ({
-          title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
-          url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "",
-          content: typeof item.content === "string" ? item.content.slice(0, 1600) : "",
-          published_date: typeof item.published_date === "string" ? item.published_date : null,
-          source_type: officialTegernsee ? "Tegernsee.com – Gastgeberquelle" : (likelyHostSite ? "Mögliche Gastgeber- oder Buchungsseite" : "Drittanbieter – Zuordnung prüfen"),
-          match_count: matchCount,
-          needs_identity_check: unrelated
-        }));
+        const sources = results.map(x => x.item.url).slice(0, 6);
+        // Search snippets often contain only a title. Try to extract the selected source pages
+        // so the draft can use actual page text; if extraction fails, retain the search snippets.
+        const extractedByUrl = new Map();
+        if (sources.length) {
+          try {
+            const extractResponse = await fetch("https://api.tavily.com/extract", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                api_key: env.TAVILY_API_KEY,
+                urls: sources.slice(0, 4),
+                extract_depth: "basic"
+              })
+            });
+            if (extractResponse.ok) {
+              const extractData = await extractResponse.json();
+              for (const extracted of (Array.isArray(extractData.results) ? extractData.results : [])) {
+                if (typeof extracted.url === "string" && typeof extracted.raw_content === "string" && extracted.raw_content.trim()) {
+                  extractedByUrl.set(extracted.url, extracted.raw_content.trim().slice(0, 7000));
+                }
+              }
+            }
+          } catch {
+            // Extraction is an enhancement; search results remain usable as source suggestions.
+          }
+        }
+        const researchResults = results.map(({ item, host, matchCount, officialTegernsee, likelyHostSite, unrelated }) => {
+          const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "";
+          const extracted = extractedByUrl.get(url);
+          return {
+            title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
+            url,
+            content: String(extracted || item.content || "").slice(0, 7000),
+            content_source: extracted ? "Seiteninhalt über Tavily ausgelesen" : "Suchauszug – Seiteninhalt nicht vollständig ausgelesen",
+            published_date: typeof item.published_date === "string" ? item.published_date : null,
+            source_type: officialTegernsee ? "Tegernsee.com – Gastgeberquelle" : (likelyHostSite ? "Mögliche Gastgeber- oder Buchungsseite" : "Drittanbieter – Zuordnung prüfen"),
+            match_count: matchCount,
+            needs_identity_check: unrelated
+          };
+        });
         const draftId = id();
         const payload = {
           name: query,
