@@ -103,7 +103,7 @@ export default {
         const now = Math.floor(Date.now() / 1000);
         const sessionToken = `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
         const digest = await tokenDigest(sessionToken);
-        const expiresAt = now + 7200;
+        const expiresAt = now + 3600;
         await env.DB.prepare("INSERT INTO admin_sessions (token_hash, expires_at, created_at) VALUES (?, ?, ?)").bind(digest, expiresAt, now).run();
         return json({ token: sessionToken, expiresAt });
       } catch {
