@@ -30,6 +30,14 @@ button.danger{background:#8a3434}
 .status,.pill{background:#e8eff8;color:#244a79}
 .result{border-color:#e0e6ee}.result a{color:#244a79}
 .price-card{border-color:#d6dfeb}
+/* Preisangebote nutzen die gesamte verfügbare Breite */
+.price-list{width:100%;min-width:0}
+.price-card{width:100%;min-width:0;padding:16px}
+.price-card>.grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}
+.price-card input:not([type="checkbox"]):not([type="file"]),.price-card select,.price-card textarea{width:100%;min-width:0}
+.price-card .wide{grid-column:1/-1}
+@media(max-width:620px){.price-card>.grid{grid-template-columns:1fr}.price-card .wide{grid-column:auto}}
+
 .gallery-tools{margin-top:12px;padding-top:10px;border-top:1px solid #e0e6ee}
 .gallery-preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .gallery-item{width:88px}
