@@ -23,7 +23,7 @@ async function ensureAdminSessionsTable(env) {
   )`).run();
 }
 async function adminAuthorized(request, env) {
-  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!supplied) return false;
   if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;
   try {
@@ -112,7 +112,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/session-logout") {
-      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
       if (supplied && env.ADMIN_TOKEN && supplied !== env.ADMIN_TOKEN) {
         try {
           await ensureAdminSessionsTable(env);
