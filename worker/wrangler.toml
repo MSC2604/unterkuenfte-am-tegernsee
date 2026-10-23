@@ -1,9 +1,0 @@
-name = "unterkuenfte-passkey-test-api"
-main = "src/index.js"
-compatibility_date = "2026-10-21"
-
-# Ausschliesslich fuer Passkey-Tests; getrennt von der produktiven Datenbank und dem Live-Worker.
-[[d1_databases]]
-binding = "DB"
-database_name = "unterkuenfte-passkey-test"
-database_id = "50b485a8-998e-46bd-baf5-799bad854a80"
