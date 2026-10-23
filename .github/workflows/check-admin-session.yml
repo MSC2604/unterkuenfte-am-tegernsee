@@ -31,7 +31,7 @@ jobs:
           from pathlib import Path
           import re
           html = Path("admin.html").read_text(encoding="utf-8")
-          scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.S | re.I)
+          scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.S | re.I)
           if not scripts:
               raise SystemExit("Kein JavaScript-Block in admin.html gefunden")
           Path("/tmp/admin-inline.js").write_text(scripts[-1], encoding="utf-8")
@@ -46,7 +46,7 @@ jobs:
           admin = Path("admin.html").read_text(encoding="utf-8")
           checks = {
               "Serverseitige Laufzeit 60 Minuten": "const expiresAt = now + 3600;" in worker,
-              "Bearer-Header korrekt verarbeitet": worker.count(r'replace(/^Bearer\\s+/i, "")') == 2,
+              "Bearer-Header korrekt verarbeitet": worker.count(r'replace(/^Bearer\s+/i, "")') == 2,
               "Master-Token umgeht Sitzungsprüfung nicht": 'if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;' not in worker,
               "Abmelden-Button vorhanden": 'id="logout"' in admin and "$('logout').onclick=logout;" in admin,
               "Countdown vorhanden": 'id="sessionTimer"' in admin and "function updateSessionTimer()" in admin,
