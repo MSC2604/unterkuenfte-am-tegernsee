@@ -180,6 +180,21 @@ export default {
       }
     }
 
+    // Read-only status endpoint for the isolated passkey test environment.
+    // Requires the test admin token and returns counts only, never credential material.
+    if (request.method === "GET" && path === "/api/admin/passkey/status") {
+      if (!(await adminAuthorized(request, env))) return json({ error: "Nicht autorisiert." }, 401);
+      try {
+        await ensurePasskeyTables(env);
+        const credentials = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_credentials").first();
+        const sessions = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_sessions WHERE expires_at > datetime('now')").first();
+        const challenges = await env.DB.prepare("SELECT COUNT(*) AS count FROM passkey_challenges WHERE expires_at > datetime('now')").first();
+        return json({ ok: true, credentials: credentials?.count || 0, activeSessions: sessions?.count || 0, activeChallenges: challenges?.count || 0, environment: "passkey-test-only" });
+      } catch {
+        return json({ error: "Test-Passkey-Status konnte nicht gelesen werden." }, 503);
+      }
+    }
+
     // Passkey authentication endpoints. These only affect the new passkey tables.
     if (request.method === "POST" && path === "/api/passkey/login-options") {
       if (!passkeyOriginAllowed(request)) return json({ error: "Unzulässige Herkunft der Passkey-Anfrage." }, 403);
