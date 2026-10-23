@@ -37,4 +37,5 @@ jobs:
           grep -F 'keepalive:true' admin.html
           grep -F 'name = "unterkuenfte-admin-test-api"' worker/wrangler.toml
           ! grep -F 'd7bdc69e-4610-402f-9154-0c0e13f46022' worker/wrangler.toml
-          grep -F 'TEST-D1-ID-HIER-EINTRAGEN' worker/wrangler.toml
+          grep -F 'database_name = "unterkuenfte-session-test"' worker/wrangler.toml
+          grep -F 'database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"' worker/wrangler.toml
