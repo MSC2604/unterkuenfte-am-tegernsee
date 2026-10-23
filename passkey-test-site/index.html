@@ -38,10 +38,10 @@ button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:650
 </main>
 <script>
 const $=id=>document.getElementById(id);
-function base(){return $('api').value.trim().replace(/\\/+$/,'')}
+function base(){let value=$('api').value.trim();while(value.endsWith('/'))value=value.slice(0,-1);return value}
 function status(s){$('status').textContent=s}
 function b64urlToBytes(value){const pad='='.repeat((4-value.length%4)%4);const raw=atob((value+pad).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(raw,c=>c.charCodeAt(0))}
-function bytesToB64url(value){return btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'')}
+function bytesToB64url(value){return btoa(String.fromCharCode(...new Uint8Array(value))).split('+').join('-').split('/').join('_').replace(/=+$/,'')}
 function credentialToJSON(cred){const out={id:cred.id,rawId:bytesToB64url(cred.rawId),type:cred.type,authenticatorAttachment:cred.authenticatorAttachment,clientExtensionResults:cred.getClientExtensionResults(),response:{}};if(cred.response.clientDataJSON)out.response.clientDataJSON=bytesToB64url(cred.response.clientDataJSON);if(cred.response.attestationObject)out.response.attestationObject=bytesToB64url(cred.response.attestationObject);if(cred.response.authenticatorData)out.response.authenticatorData=bytesToB64url(cred.response.authenticatorData);if(cred.response.signature)out.response.signature=bytesToB64url(cred.response.signature);if(cred.response.userHandle)out.response.userHandle=bytesToB64url(cred.response.userHandle);if(cred.response.publicKey)out.response.publicKey=bytesToB64url(cred.response.publicKey);if(typeof cred.response.getTransports==='function')out.response.transports=cred.response.getTransports();return out}
 function publicKeyOptions(o,registration){const x={...o,challenge:b64urlToBytes(o.challenge)};if(registration){x.user={...o.user,id:b64urlToBytes(o.user.id)};x.excludeCredentials=(o.excludeCredentials||[]).map(c=>({...c,id:b64urlToBytes(c.id)}))}else{x.allowCredentials=(o.allowCredentials||[]).map(c=>({...c,id:b64urlToBytes(c.id)}))}delete x.challengeId;return x}
 async function request(path,body,auth=false){const headers={'Content-Type':'application/json'};if(auth&&$('token').value.trim())headers.Authorization='Bearer '+$('token').value.trim();const r=await fetch(base()+path,{method:'POST',headers,body:JSON.stringify(body||{})});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
