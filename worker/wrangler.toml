@@ -2,9 +2,8 @@ name = "unterkuenfte-admin-test-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
-# ABSICHTLICH NICHT DEPLOYEN: Erst eine separate Cloudflare-D1-Testdatenbank
-# anlegen und deren ID hier eintragen. Niemals die Produktions-Datenbank-ID verwenden.
+# Separate Testdatenbank. Keine Verbindung zur Produktionsdatenbank.
 [[d1_databases]]
 binding = "DB"
-database_name = "unterkuenfte-testdatenbank-erst-anlegen"
-database_id = "TEST-D1-ID-HIER-EINTRAGEN"
+database_name = "unterkuenfte-session-test"
+database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"
