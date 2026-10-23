@@ -39,3 +39,7 @@ jobs:
           ! grep -F 'd7bdc69e-4610-402f-9154-0c0e13f46022' worker/wrangler.toml
           grep -F 'database_name = "unterkuenfte-session-test"' worker/wrangler.toml
           grep -F 'database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"' worker/wrangler.toml
+          grep -F 'if (!row || row.expires_at <= now)' worker/src/index.js
+          grep -F 'if(remaining<=0)' worker/public/index.html
+          grep -F 'Date.now()>=sessionExpiresAt' worker/public/index.html
+          grep -F 'function restoreSession()' worker/public/index.html
