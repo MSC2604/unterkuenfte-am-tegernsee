@@ -10,10 +10,35 @@ const JSON_HEADERS = {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
-function adminAuthorized(request, env) {
-  const token = env.ADMIN_TOKEN;
-  if (!token) return false;
-  return request.headers.get("authorization") === `Bearer ${token}`;
+async function tokenDigest(token) {
+  const bytes = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
+}
+async function ensureAdminSessionsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`).run();
+}
+async function adminAuthorized(request, env) {
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  if (!supplied) return false;
+  if (env.ADMIN_TOKEN && supplied === env.ADMIN_TOKEN) return true;
+  try {
+    await ensureAdminSessionsTable(env);
+    const digest = await tokenDigest(supplied);
+    const now = Math.floor(Date.now() / 1000);
+    const row = await env.DB.prepare("SELECT expires_at FROM admin_sessions WHERE token_hash = ?").bind(digest).first();
+    if (!row || row.expires_at <= now) {
+      if (row) await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(digest).run();
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 function id() {
   return crypto.randomUUID();
@@ -66,6 +91,38 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: JSON_HEADERS });
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    if (request.method === "POST" && path === "/api/admin/session-login") {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
+      if (!env.ADMIN_TOKEN || typeof body.token !== "string" || body.token !== env.ADMIN_TOKEN) {
+        return json({ error: "Admin-Token stimmt nicht." }, 401);
+      }
+      try {
+        await ensureAdminSessionsTable(env);
+        const now = Math.floor(Date.now() / 1000);
+        const sessionToken = `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
+        const digest = await tokenDigest(sessionToken);
+        const expiresAt = now + 7200;
+        await env.DB.prepare("INSERT INTO admin_sessions (token_hash, expires_at, created_at) VALUES (?, ?, ?)").bind(digest, expiresAt, now).run();
+        return json({ token: sessionToken, expiresAt });
+      } catch {
+        return json({ error: "Anmeldung konnte nicht sicher gespeichert werden. Bitte später erneut versuchen." }, 503);
+      }
+    }
+
+    if (request.method === "POST" && path === "/api/admin/session-logout") {
+      const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+      if (supplied && env.ADMIN_TOKEN && supplied !== env.ADMIN_TOKEN) {
+        try {
+          await ensureAdminSessionsTable(env);
+          await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(await tokenDigest(supplied)).run();
+        } catch {
+          return json({ error: "Abmeldung konnte serverseitig nicht bestätigt werden." }, 503);
+        }
+      }
+      return json({ ok: true });
+    }
 
     if (request.method === "GET" && path === "/api/health") {
       try {
@@ -148,7 +205,7 @@ export default {
     }
 
     if (path.startsWith("/api/admin/")) {
-      if (!adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
