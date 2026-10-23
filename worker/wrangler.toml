@@ -1,9 +1,9 @@
-name = "unterkuenfte-am-tegernsee-api"
+name = "unterkuenfte-passkey-test-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
-# Eigene D1-Datenbank fuer Unterkuenfte; getrennt von der Restaurant-App.
+# Ausschliesslich fuer Passkey-Tests; getrennt von der produktiven Datenbank und dem Live-Worker.
 [[d1_databases]]
 binding = "DB"
-database_name = "unterkuenfte-am-tegernsee"
-database_id = "d7bdc69e-4610-402f-9154-0c0e13f46022"
+database_name = "unterkuenfte-passkey-test"
+database_id = "50b485a8-998e-46bd-baf5-799bad854a80"
