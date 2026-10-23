@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passkey-Test – Unterkünfte am Tegernsee</title>
+<style>
+:root{color-scheme:light;--blue:#244a79;--pale:#e8eff8;--ink:#203149;--line:#d6dfeb}
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.5 system-ui,-apple-system,sans-serif}
+header{background:linear-gradient(120deg,#193b68,#244a79 70%,#5277a6);color:white;padding:22px max(18px,calc((100% - 720px)/2))}
+main{max-width:720px;margin:22px auto;padding:0 14px}.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 6px 20px rgba(36,74,121,.06)}
+h1{font-size:1.35rem;margin:0}h2{font-size:1.1rem;margin:0 0 12px}p{margin:.4em 0}.muted{color:#5b6d7b;font-size:.92rem}
+label{display:block;font-weight:650;font-size:.92rem;margin:10px 0 4px}input{width:100%;padding:11px;border:1px solid #cbd7e7;border-radius:8px;font:inherit;background:white;color:inherit}
+button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:650;cursor:pointer;margin:8px 8px 0 0;background:var(--blue);color:white}button.secondary{background:var(--pale);color:var(--blue);border:1px solid var(--line)}
+.status{padding:10px 12px;border-radius:8px;background:var(--pale);margin:12px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header><h1>Passkey-Test – Unterkünfte am Tegernsee</h1><p>Getrennte Testoberfläche. Die produktive App und ihre Daten werden nicht verwendet.</p></header>
+<main>
+<section class="panel">
+<h2>1. Testverbindung</h2>
+<p class="muted">Diese Seite darf nur mit dem separaten Test-Worker verbunden werden. Das Admin-Token wird nicht gespeichert.</p>
+<label for="api">Adresse des Test-Workers</label>
+<input id="api" value="https://unterkuenfte-passkey-test-api.msc4021.workers.dev" autocomplete="url">
+<label for="token">Test-Admin-Token</label>
+<input id="token" type="password" autocomplete="off" placeholder="Nur falls für Registrierung eingerichtet">
+<button id="health" class="secondary">Verbindung prüfen</button>
+<button id="register">Passkey einrichten</button>
+<button id="login">Mit Passkey anmelden</button>
+<div id="status" class="status" role="status">Bereit. Prüfe zuerst die Verbindung zum Test-Worker.</div>
+</section>
+<section class="panel">
+<h2>2. Was wir prüfen</h2>
+<ul><li>Ob der Test-Worker erreichbar ist</li><li>Ob der Browser Passkeys anbietet</li><li>Ob das Gerät einen Passkey registrieren und anschließend zur Anmeldung verwenden kann</li></ul>
+<p class="muted">Samsung Pass wird nur dann verwendet, wenn dein Browser und Android ihn als Passkey-Anbieter anbieten. Das ist noch nicht bestätigt.</p>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function base(){return $('api').value.trim().replace(/\\/+$/,'')}
+function status(s){$('status').textContent=s}
+function b64urlToBytes(value){const pad='='.repeat((4-value.length%4)%4);const raw=atob((value+pad).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(raw,c=>c.charCodeAt(0))}
+function bytesToB64url(value){return btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'')}
+function credentialToJSON(cred){const out={id:cred.id,rawId:bytesToB64url(cred.rawId),type:cred.type,authenticatorAttachment:cred.authenticatorAttachment,clientExtensionResults:cred.getClientExtensionResults(),response:{}};if(cred.response.clientDataJSON)out.response.clientDataJSON=bytesToB64url(cred.response.clientDataJSON);if(cred.response.attestationObject)out.response.attestationObject=bytesToB64url(cred.response.attestationObject);if(cred.response.authenticatorData)out.response.authenticatorData=bytesToB64url(cred.response.authenticatorData);if(cred.response.signature)out.response.signature=bytesToB64url(cred.response.signature);if(cred.response.userHandle)out.response.userHandle=bytesToB64url(cred.response.userHandle);if(cred.response.publicKey)out.response.publicKey=bytesToB64url(cred.response.publicKey);if(typeof cred.response.getTransports==='function')out.response.transports=cred.response.getTransports();return out}
+function publicKeyOptions(o,registration){const x={...o,challenge:b64urlToBytes(o.challenge)};if(registration){x.user={...o.user,id:b64urlToBytes(o.user.id)};x.excludeCredentials=(o.excludeCredentials||[]).map(c=>({...c,id:b64urlToBytes(c.id)}))}else{x.allowCredentials=(o.allowCredentials||[]).map(c=>({...c,id:b64urlToBytes(c.id)}))}delete x.challengeId;return x}
+async function request(path,body,auth=false){const headers={'Content-Type':'application/json'};if(auth&&$('token').value.trim())headers.Authorization='Bearer '+$('token').value.trim();const r=await fetch(base()+path,{method:'POST',headers,body:JSON.stringify(body||{})});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
+$('health').onclick=async()=>{try{status('Prüfe Test-Worker …');const r=await fetch(base()+'/api/health');const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Test-Worker nicht bereit');status('Test-Worker erreichbar. Datenbankverbindung: '+(d.database?'OK':'nicht verfügbar')+'.')}catch(e){status('Verbindung fehlgeschlagen: '+e.message)}};
+$('register').onclick=async()=>{try{if(!$('token').value.trim())throw new Error('Für die Registrierung braucht es ein Test-Admin-Token. Bitte nicht das Produktions-Token verwenden.');if(!window.PublicKeyCredential||!navigator.credentials)throw new Error('Dieser Browser unterstützt keine Passkeys.');status('Registrierung wird vorbereitet …');const opts=await request('/api/admin/passkey/register-options',{},true);const cred=await navigator.credentials.create({publicKey:publicKeyOptions(opts,true)});if(!cred)throw new Error('Registrierung abgebrochen.');await request('/api/admin/passkey/register-verify',{challengeId:opts.challengeId,response:credentialToJSON(cred)},true);status('Passkey erfolgreich registriert. Teste jetzt „Mit Passkey anmelden“.')}catch(e){status('Registrierung: '+e.message)}};
+$('login').onclick=async()=>{try{if(!window.PublicKeyCredential||!navigator.credentials)throw new Error('Dieser Browser unterstützt keine Passkeys.');status('Passkey-Anmeldung wird vorbereitet …');const opts=await request('/api/passkey/login-options',{});const cred=await navigator.credentials.get({publicKey:publicKeyOptions(opts,false)});if(!cred)throw new Error('Anmeldung abgebrochen.');const result=await request('/api/passkey/login-verify',{challengeId:opts.challengeId,response:credentialToJSON(cred)});status('Passkey-Anmeldung erfolgreich. Test-Session wurde vom Worker bestätigt.')}catch(e){status('Anmeldung: '+e.message)}};
+</script>
+</body></html>
