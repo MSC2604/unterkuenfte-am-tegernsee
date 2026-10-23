@@ -1,9 +1,10 @@
-name = "unterkuenfte-am-tegernsee-api"
+name = "unterkuenfte-passkey-test-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
-# Eigene D1-Datenbank fuer Unterkuenfte; getrennt von der Restaurant-App.
+# ABSICHTLICH NICHT DEPLOYEN: Erst eine separate Cloudflare-D1-Testdatenbank
+# anlegen und deren ID hier eintragen. Niemals die Produktions-Datenbank-ID verwenden.
 [[d1_databases]]
 binding = "DB"
-database_name = "unterkuenfte-am-tegernsee"
-database_id = "d7bdc69e-4610-402f-9154-0c0e13f46022"
+database_name = "unterkuenfte-testdatenbank-erst-anlegen"
+database_id = "TEST-D1-ID-HIER-EINTRAGEN"
