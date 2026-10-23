@@ -2,6 +2,11 @@ name = "unterkuenfte-admin-test-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
+# Statische Admin-Testoberfläche wird vom selben isolierten Test-Worker ausgeliefert.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 # Separate Testdatenbank. Keine Verbindung zur Produktionsdatenbank.
 [[d1_databases]]
 binding = "DB"
