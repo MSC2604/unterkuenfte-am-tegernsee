@@ -58,10 +58,10 @@ button.danger{background:#8a3434}
 <main>
 <section class="panel">
 <h2>1. Verbindung</h2>
-<p class="muted">Trage die Worker-Adresse und dein Admin-Token ein. Das Token wird nur während dieser geöffneten Seite verwendet und nicht gespeichert.</p>
+<p class="muted">Einmal mit deinem bisherigen Admin-Token anmelden. Die Sitzung endet spätestens nach 2 Stunden. Mit „Abmelden“ kannst du sie jederzeit beenden.</p>
 <label for="api">Worker-Adresse</label><input id="api" value="https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev" autocomplete="url">
-<label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN">
-<button id="connect">Verwaltung laden</button><button id="newSearch" class="secondary">Neue Webrecherche</button>
+<label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="Nur bei neuer Anmeldung erforderlich">
+<button id="connect">Anmelden / Verwaltung laden</button><button id="logout" class="secondary" type="button">Abmelden</button><button id="newSearch" class="secondary">Neue Webrecherche</button>
 <div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
 <div id="searchBox" class="hidden"><label for="query">Unterkunftsname oder Link von Tegernsee.com</label><input id="query" placeholder="Name oder https://www.tegernsee.com/..."><button id="runSearch">Recherche starten</button><p class="muted">Sucht ohne feste Personenzahl nach dem Gastgeber und möglichen Einheiten. Bis zu 8 unterschiedliche Treffer werden als Entwurf gesammelt. Preise und Verfügbarkeit sind dadurch nicht bestätigt.</p></div>
 </section>
@@ -69,11 +69,16 @@ button.danger{background:#8a3434}
 </main>
 <script>
 const $=id=>document.getElementById(id);
-let drafts=[], published=[], selected=null;
+let drafts=[], published=[], selected=null, sessionToken='', sessionExpiresAt=0;
+const SESSION_KEY='unterkuenfte_admin_session_v1';
 function base(){return $('api').value.trim().replace(/\/+$/,'')}
-function headers(){return {'Authorization':'Bearer '+$('token').value.trim(),'Content-Type':'application/json'}}
+function headers(){return {'Authorization':'Bearer '+sessionToken,'Content-Type':'application/json'}}
 function status(s){$('status').textContent=s}
-async function api(path,opts={}){const r=await fetch(base()+path,{...opts,headers:{...headers(),...(opts.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok){if(r.status===401||r.status===403)throw new Error('Falsches Passwort bzw. Admin-Token. Bitte Eingabe prüfen und erneut versuchen.');throw new Error(d.error||('HTTP '+r.status))}return d}
+function clearSession(){sessionToken='';sessionExpiresAt=0;try{localStorage.removeItem(SESSION_KEY)}catch{}}
+function restoreSession(){try{const saved=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(saved&&saved.token&&Number(saved.expiresAt)>Date.now()){sessionToken=saved.token;sessionExpiresAt=Number(saved.expiresAt);return true}}catch{}clearSession();return false}
+async function api(path,opts={}){if(!sessionToken||Date.now()>=sessionExpiresAt){clearSession();throw new Error('Deine Anmeldung ist abgelaufen. Bitte erneut anmelden.')}const r=await fetch(base()+path,{...opts,headers:{...headers(),...(opts.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok){if(r.status===401||r.status===403){clearSession();throw new Error('Anmeldung abgelaufen. Bitte erneut anmelden.')}throw new Error(d.error||('HTTP '+r.status))}return d}
+async function login(){const token=$('token').value.trim();if(!token){status('Bitte dein bisheriges Admin-Token eingeben.');return}try{status('Anmeldung wird geprüft …');const r=await fetch(base()+'/api/admin/session-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||'Anmeldung fehlgeschlagen.');sessionToken=d.token;sessionExpiresAt=Number(d.expiresAt)*1000;try{localStorage.setItem(SESSION_KEY,JSON.stringify({token:sessionToken,expiresAt:sessionExpiresAt}))}catch{}$('token').value='';await load()}catch(e){status('Anmeldung fehlgeschlagen: '+e.message)}}
+async function logout(){const oldToken=sessionToken;try{if(oldToken){await fetch(base()+'/api/admin/session-logout',{method:'POST',headers:{'Authorization':'Bearer '+oldToken,'Content-Type':'application/json'},body:'{}'})}}catch{}clearSession();drafts=[];published=[];$('drafts').innerHTML='';$('published').innerHTML='';$('searchBox').classList.add('hidden');status('Du bist abgemeldet.');$('token').value='';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setupAccommodationImageTools(container, initialImage, onChange){
  const input=container.querySelector('.accommodation-image-file');
@@ -162,6 +167,7 @@ function priceField(key,label,value,type='text',wide=false){return '<div class="
 function readPayload(card){const p=JSON.parse(card.dataset.payload||'{}');card.querySelectorAll('[data-key]').forEach(el=>p[el.dataset.key]=el.value.trim());p.prices=Array.from(card.querySelectorAll('.price-card')).map(row=>{const item={};row.querySelectorAll('[data-price-key]').forEach(el=>item[el.dataset.priceKey]=el.type==='checkbox'?el.checked:el.value.trim());item.price_display_note=item.price_note_enabled&&item.price_note_option?item.price_note_option:'';delete item.price_note_enabled;delete item.price_note_option;for(const k of ['price_amount','occupancy','min_nights','valid_from','valid_to','extra_cleaning_amount'])if(item[k]==='')item[k]=null;else if(['price_amount','occupancy','min_nights','extra_cleaning_amount'].includes(k))item[k]=Number(item[k]);return item});return p}
 async function save(card,approve){const feedback=card.querySelector('.feedback');try{const p=readPayload(card);if(!p.name){feedback.textContent='Bitte zuerst den Unterkunftsnamen eintragen.';return}if(approve&&!confirm('Diesen Eintrag jetzt veröffentlichen? Bitte Quellen und Angaben vorher prüfen.'))return;await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/update',{method:'POST',body:JSON.stringify({payload:p})});if(approve){await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/approve',{method:'POST',body:'{}'});feedback.textContent='Freigegeben. Eintrag wurde veröffentlicht.';await load()}else{card.dataset.payload=JSON.stringify(p);feedback.textContent='Entwurf gespeichert. Noch nicht veröffentlicht.'}}catch(e){feedback.textContent='Fehler: '+e.message}}
 async function reject(card){if(!confirm('Diesen Entwurf wirklich ablehnen?'))return;try{await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/reject',{method:'POST',body:'{}'});status('Entwurf abgelehnt.');await load()}catch(e){card.querySelector('.feedback').textContent='Fehler: '+e.message}}
-$('connect').onclick=load;$('newSearch').onclick=()=>$('searchBox').classList.toggle('hidden');$('runSearch').onclick=async()=>{const query=$('query').value.trim();if(!query){status('Bitte einen Namen oder eine Website eingeben.');return}try{status('Recherche läuft …');const d=await api('/api/admin/research',{method:'POST',body:JSON.stringify({query})});status(d.message||'Recherche gespeichert.');$('query').value='';await load()}catch(e){status('Recherche fehlgeschlagen: '+e.message)}};
+$('connect').onclick=login;$('logout').onclick=logout;$('newSearch').onclick=()=>$('searchBox').classList.toggle('hidden');
+if(restoreSession()){status('Gespeicherte Sitzung wird geprüft …');load()}else{status('Bitte mit deinem bisherigen Admin-Token anmelden.');}$('runSearch').onclick=async()=>{const query=$('query').value.trim();if(!query){status('Bitte einen Namen oder eine Website eingeben.');return}try{status('Recherche läuft …');const d=await api('/api/admin/research',{method:'POST',body:JSON.stringify({query})});status(d.message||'Recherche gespeichert.');$('query').value='';await load()}catch(e){status('Recherche fehlgeschlagen: '+e.message)}};
 </script>
 </body></html>
