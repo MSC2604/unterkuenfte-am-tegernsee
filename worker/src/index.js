@@ -247,7 +247,7 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/admin/passkey/register-verify") {
-      if (!adminAuthorized(request, env)) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
+      if (!(await adminAuthorized(request, env))) return json({ error: "Bitte zuerst mit dem Admin-Token anmelden." }, 401);
       let body;
       try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
       try {
