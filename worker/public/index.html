@@ -110,7 +110,14 @@ async function load(){
    status(drafts.length+' offene Entwürfe geladen. Die Liste der veröffentlichten Unterkünfte konnte nicht geladen werden.');
   }
  }catch(e){
-  if(/Falsches Passwort/.test(e.message)){status('⚠️ '+e.message)}
+  // Die isolierte Sitzungstest-Datenbank enthält absichtlich keine Unterkunftstabellen.
+  // Ein HTTP 500 beim Laden der Entwürfe darf den bereits gestarteten Countdown nicht verdecken.
+  if(e.message==='HTTP 500'){
+   drafts=[];published=[];
+   $('drafts').innerHTML='<section class="panel"><p>Die Anmeldung ist aktiv. Die isolierte Testdatenbank ist leer; Unterkunftsdaten werden hier nicht geladen.</p></section>';
+   $('published').innerHTML='<section class="panel"><p>Nur Sitzung, Countdown und Abmelden werden in diesem Test geprüft.</p></section>';
+   status('Sitzung aktiv. Testdatenbank leer – Countdown und „Abmelden“ können geprüft werden.');
+  }else if(/Falsches Passwort/.test(e.message)){status('⚠️ '+e.message)}
   else{status('Fehler beim Laden der Verwaltung: '+e.message+'\\nPrüfe Worker-Adresse sowie ob Worker und Datenbank eingerichtet sind.')}
  }
 }
