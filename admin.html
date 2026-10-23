@@ -31,7 +31,11 @@ button.danger{background:#8a3434}
 .result{border-color:#e0e6ee}.result a{color:#244a79}
 .price-card{border-color:#d6dfeb}
 /* Preisangebote nutzen die gesamte verfügbare Breite */
-.price-list{width:100%;min-width:0}
+.price-list{width:100%;min-width:0;display:block}
+.price-list .price-card{display:block!important;width:100%!important;max-width:none!important;min-width:0!important}
+.price-list .price-card>.grid{display:block!important;width:100%!important}
+.price-list .price-card>.grid>div{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;grid-column:auto!important}
+.price-list .price-card>.grid>div input:not([type="checkbox"]):not([type="file"]),.price-list .price-card>.grid>div select,.price-list .price-card>.grid>div textarea{display:block;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box}
 .price-card{width:100%;min-width:0;padding:16px}
 .price-card>.grid{grid-template-columns:1fr;column-gap:0}
 .price-card input:not([type="checkbox"]):not([type="file"]),.price-card select,.price-card textarea{width:100%;min-width:0}
