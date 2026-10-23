@@ -1,14 +1,9 @@
-name = "unterkuenfte-admin-test-api"
+name = "unterkuenfte-am-tegernsee-api"
 main = "src/index.js"
 compatibility_date = "2026-10-21"
 
-# Statische Admin-Testoberfläche wird vom selben isolierten Test-Worker ausgeliefert.
-[assets]
-directory = "./public"
-binding = "ASSETS"
-
-# Separate Testdatenbank. Keine Verbindung zur Produktionsdatenbank.
+# Eigene D1-Datenbank fuer Unterkuenfte; getrennt von der Restaurant-App.
 [[d1_databases]]
 binding = "DB"
-database_name = "unterkuenfte-session-test"
-database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"
+database_name = "unterkuenfte-am-tegernsee"
+database_id = "d7bdc69e-4610-402f-9154-0c0e13f46022"
