@@ -364,7 +364,6 @@ export default {
             needs_identity_check: unrelated
           };
         });
-        const draftId = id();
         const payload = {
           name: query,
           research_status: results.length ? "results_found_needs_review" : "no_results",
@@ -373,6 +372,20 @@ export default {
           prices_note: "Suchtreffer sind keine bestätigten Preise oder Verfügbarkeiten. Angaben vor Veröffentlichung auf der Originalquelle prüfen.",
           research_results: researchResults
         };
+        // Preview mode returns the result directly and deliberately does not write to D1.
+        if (body.preview === true) {
+          return json({
+            query,
+            payload,
+            status: "preview",
+            results_found: results.length,
+            sources,
+            message: results.length
+              ? "Recherche abgeschlossen. Die Ergebnisse stehen direkt im Formular; dauerhaft gespeichert wird erst auf deinen Wunsch."
+              : "Keine passenden Suchtreffer gefunden. Es wurde nichts gespeichert."
+          });
+        }
+        const draftId = id();
         await env.DB.prepare(
           "INSERT INTO research_drafts (id, query, payload_json, source_urls_json, status) VALUES (?, ?, ?, ?, 'pending')"
         ).bind(draftId, query, JSON.stringify(payload), JSON.stringify(sources)).run();
@@ -381,7 +394,7 @@ export default {
           status: "pending",
           results_found: results.length,
           sources,
-          message: "Recherche als Entwurf gespeichert. Noch nicht veröffentlicht; Preise und Kontaktdaten müssen anhand der Quellen geprüft werden."
+          message: "Recherche als Entwurf gespeichert. Noch nicht veröffentlicht; Preise und Kontaktdaten müssen anhand der Quellen geprüft."
         }, 201);
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
