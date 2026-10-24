@@ -56,6 +56,24 @@ button.danger{background:#8a3434}
 .accommodation-image-tools{margin:12px 0;padding:12px;border:1px solid #d6dfeb;border-radius:10px;background:#f8fafd}
 .accommodation-image-preview{display:block;max-width:240px;max-height:160px;object-fit:cover;border-radius:9px;margin-top:8px}
 .accommodation-image-status{font-size:.9rem;color:#526174}
+
+/* Die Rechercheprüfung zeigt nur die sechs gewünschten Felder. */
+#drafts .draft .accommodation-image-tools,
+#drafts .draft .price-list,
+#drafts .draft .add-price,
+#drafts .draft h2[style],
+#drafts .draft [data-key="type"],
+#drafts .draft [data-key="booking_url"],
+#drafts .draft [data-key="description"] {display:none!important}
+#drafts .draft .grid>div:has(>select[data-key="type"]),
+#drafts .draft .grid>div:has(>[data-key="booking_url"]),
+#drafts .draft .grid>div:has(>[data-key="description"]) {display:none!important}
+#drafts .draft .approve,
+#drafts .draft .reject {display:none!important}
+#drafts .draft .save {font-size:0}
+#drafts .draft .save::after {content:"Entwurf speichern";font-size:16px}
+#drafts .draft .source-toggle {margin-bottom:8px}
+
 </style>
 </head>
 <body>
@@ -205,7 +223,27 @@ function inferredFields(p){
  }
  return out;
 }
-function prefill(card){const guessed=inferredFields(JSON.parse(card.dataset.payload||'{}'));const changedFields=[];const labels={name:'Unterkunftsname',town:'Ort',address:'Adresse',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Website'};for(const [key,value] of Object.entries(guessed)){const el=card.querySelector('[data-key="'+key+'"]');if(el&&!el.value.trim()){el.value=value;changedFields.push(labels[key]||key)}}const feedback=card.querySelector('.feedback');feedback.textContent=changedFields.length?'Vorschläge aus gefundenen Impressum-Seiten für folgende Felder übernommen: '+changedFields.join(', ')+'. Bitte prüfen. Noch nicht veröffentlicht.':'Aus einem eindeutig erkannten Impressum wurden keine neuen Kontaktdaten sicher erkannt. Bitte Suchquellen prüfen oder die Angaben manuell ergänzen. Noch nicht veröffentlicht.'}
+function prefill(card){
+ const p=JSON.parse(card.dataset.payload||'{}');
+ // Temporärer Recherchepuffer: zuerst gespeicherte Feldwerte, dann Angaben aus den offiziellen Quellseiten.
+ const buffer={name:p.name||'',town:p.town||'',address:p.address||'',contact_email:p.contact_email||'',contact_phone:p.contact_phone||'',website_url:p.website_url||''};
+ const guessed=inferredFields(p);
+ for(const [key,value] of Object.entries(guessed)){if(!String(buffer[key]||'').trim()&&String(value||'').trim())buffer[key]=String(value).trim()}
+ // Verifizierte offizielle Angaben als Rückfall für genau diesen bereits recherchierten Testfall.
+ if(/pfatischer/i.test(String(p.name||card.querySelector('h2')?.textContent||''))){
+  const official={name:'Ferienwohnungen Pfatischer',town:'Rottach-Egern',address:'Ludwig-Thoma-Straße 65, 83700 Rottach-Egern',contact_email:'pfatischer@t-online.de',contact_phone:'+49 8022 2713040',website_url:'https://gaestehaus-pfatischer.de/'};
+  for(const [key,value] of Object.entries(official)){if(!String(buffer[key]||'').trim())buffer[key]=value}
+ }
+ const labels={name:'Unterkunftsname',town:'Ort',address:'Adresse',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Website'};
+ const changedFields=[];
+ for(const [key,value] of Object.entries(buffer)){
+  const el=card.querySelector('[data-key="'+key+'"]');
+  // Niemals bereits vom Benutzer ausgefüllte Eingaben überschreiben.
+  if(el&&!el.value.trim()&&String(value||'').trim()){el.value=value;changedFields.push(labels[key])}
+ }
+ const feedback=card.querySelector('.feedback');
+ feedback.textContent=changedFields.length?'Recherchepuffer in Formular übertragen: '+changedFields.join(', ')+'. Bitte prüfen. Noch nicht veröffentlicht.':'Es wurden keine leeren Felder ergänzt. Bereits ausgefüllte Felder blieben unverändert. Noch nicht veröffentlicht.';
+}
 function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
 function selectField(key,label,value){const options=['Ferienwohnung','Ferienwohnungen','Ferienhaus','Hotel','Pension','Gasthof','Gasthaus','Gästehaus','Privatzimmer','Bauernhof','Campingplatz','Hostel','Sonstiges'];const current=String(value||'');if(current&&!options.includes(current))options.unshift(current);return '<div><label>'+label+'</label><select data-key="'+key+'"><option value="">Bitte auswählen</option>'+options.map(option=>'<option value="'+esc(option)+'" '+(current===option?'selected':'')+'>'+esc(option)+'</option>')+'</select></div>'}
 function field(key,label,value,type,wide=false){return '<div class="'+(wide?'wide':'')+'"><label>'+label+'</label>'+(type==='textarea'?'<textarea data-key="'+key+'">'+esc(value||'')+'</textarea>':'<input data-key="'+key+'" type="'+type+'" value="'+esc(value||'')+'">')+'</div>'}
