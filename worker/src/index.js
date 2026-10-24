@@ -530,6 +530,8 @@ export default {
             typeof price.tourist_tax_note === "string" ? price.tourist_tax_note.slice(0, 1000) : null,
             typeof price.additional_costs_note === "string" ? price.additional_costs_note.slice(0, 1000) : null,
             ["zzgl. Kurtaxe und Endreinigung", "zzgl. Kurtaxe und inkl. Endreinigung"].includes(price.price_display_note) ? price.price_display_note : null,
+            typeof price.unit_description === "string" ? price.unit_description.slice(0, 3000) : null,
+            price.show_price_ab === false || price.show_price_ab === 0 ? 0 : 1,
             price.price_on_request ? 1 : 0, sourceUrl.slice(0, 2000),
             typeof price.source_name === "string" ? price.source_name.slice(0, 300) : null));
         }
