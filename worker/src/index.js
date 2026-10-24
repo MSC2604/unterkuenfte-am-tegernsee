@@ -516,7 +516,7 @@ export default {
           batch.push(env.DB.prepare(
             `INSERT INTO price_offers
              (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name)
-             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(id(), accommodationId, amount,
             typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
             Number.isInteger(price.min_nights) ? price.min_nights : null,
