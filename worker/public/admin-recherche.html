@@ -189,29 +189,29 @@ function inferredFields(p){
  const legal=valid.filter(isLegal);
  const preferred=legal.length?legal:valid;
  const all=preferred.map(x=>String(x.content||'')).join('\n');
- const flat=all.replace(/\\s+/g,' ').trim();
+ const flat=all.replace(/\s+/g,' ').trim();
  const out={};
- const clean=s=>String(s||'').replace(/\\s+/g,' ').trim().replace(/^[,;|•\\s]+|[,;|•\\s]+$/g,'');
+ const clean=s=>String(s||'').replace(/\s+/g,' ').trim().replace(/^[,;|•\s]+|[,;|•\s]+$/g,'');
  if(!p.contact_email){
-   const matches=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig)||[];
-   const email=matches.find(x=>!/example\\.|\\.(?:png|jpg|jpeg|webp)$/i.test(x));
+   const matches=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[];
+   const email=matches.find(x=>!/example\.|\.(?:png|jpg|jpeg|webp)$/i.test(x));
    if(email)out.contact_email=email.replace(/[),.;]+$/,'');
  }
  if(!p.contact_phone){
-   const matches=all.match(/(?:\\+49|0049|0)[\\s()./-]*(?:\\d[\\s()./-]*){7,}/g)||[];
-   const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
+   const matches=all.match(/(?:\+49|0049|0)[\s()./-]*(?:\d[\s()./-]*){7,}/g)||[];
+   const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
    if(phone)out.contact_phone=phone.raw;
  }
- const postalMatches=[...flat.matchAll(/\\b(\\d{5})\\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\\s+(?:Deutschland|Telefon|Tel\\.?|E-?Mail|Fax|\\+49|$)|[,;])/gi)];
- const postal=postalMatches.find(m=>!/^(?:Deutschland|Bayern|Germany)$/i.test(clean(m[2])))||flat.match(/\\b(\\d{5})\\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/i);
+ const postalMatches=[...flat.matchAll(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\s+(?:Deutschland|Telefon|Tel\.?|E-?Mail|Fax|\+49|$)|[,;])/gi)];
+ const postal=postalMatches.find(m=>!/^(?:Deutschland|Bayern|Germany)$/i.test(clean(m[2])))||flat.match(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/i);
  if(!p.town&&postal){
-   const town=clean(postal[2]).split(/\\s+(?:Telefon|Tel\\.?|E-?Mail|Fax|Öffnungszeiten|Deutschland)\\b/i)[0];
+   const town=clean(postal[2]).split(/\s+(?:Telefon|Tel\.?|E-?Mail|Fax|Öffnungszeiten|Deutschland)\b/i)[0];
    if(town&&town.length<45)out.town=town;
  }
  if(!p.address){
-   const streetRe=/\\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.'-]*(?:[ \\u2011-]+[A-ZÄÖÜa-zäöüß.'-]+){0,5}\\s+(?:straße|strasse|str\\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer|allee)\\s+\\d{1,4}[a-z]?\\b/ig;
+   const streetRe=/\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.'-]*(?:[ \u2011-]+[A-ZÄÖÜa-zäöüß.'-]+){0,5}\s+(?:straße|strasse|str\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer|allee)\s+\d{1,4}[a-z]?\b/ig;
    const street=(all.match(streetRe)||[]).map(clean).find(x=>x.length<120);
-   const postalAddress=flat.match(/([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,75}\\s+\\d{1,4}[a-z]?)\\s*,?\\s*(\\d{5}\\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,40})/i);
+   const postalAddress=flat.match(/([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,75}\s+\d{1,4}[a-z]?)\s*,?\s*(\d{5}\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,40})/i);
    if(postalAddress)out.address=clean(postalAddress[1]+', '+postalAddress[2]);
    else if(street&&postal)out.address=clean(street+', '+postal[1]+' '+postal[2]);
    else if(street)out.address=street;
