@@ -510,16 +510,15 @@ function buildReservationDialog(){
   const firstName=form.querySelector('#reservationFirstName').value.trim(),lastName=form.querySelector('#reservationLastName').value.trim(),email=form.querySelector('#reservationEmail').value.trim(),phone=form.querySelector('#reservationPhone').value.trim(),message=form.querySelector('#reservationMessage').value.trim();
   saveReservationContact();
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
-  const generalText=kind==='apartment'?'welche Ihrer Ferienwohnungen':kind==='room'?'welche Zimmer in Ihrem Haus':'welche Unterkünfte oder Einheiten';
-  const selectedPhrase=kind==='apartment'?'die Ferienwohnung':kind==='room'?'das Zimmer':'die Einheit';
+  const selectedPhrase=kind==='apartment'?'die gewünschte Ferienwohnung':kind==='room'?'das gewünschte Zimmer':'die gewünschte Einheit';
   const greeting='Sehr geehrte Damen und Herren,';
   const opening=selected
-   ? 'ich interessiere mich für '+selectedPhrase+' „'+selectedText+'“ bei '+a.name+'. Ist sie im unten genannten Zeitraum verfügbar?'
-   : 'ich interessiere mich für '+a.name+' und möchte gern wissen, '+generalText+' im unten genannten Zeitraum verfügbar sind.';
-  let body=[greeting,'','ich plane einen Aufenthalt bei Ihnen und freue mich über eine kurze Rückmeldung.','', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
+   ? 'hiermit möchte ich mich erkundigen, ob '+selectedPhrase+' „'+selectedText+'“ im nachfolgend genannten Zeitraum verfügbar ist.'
+   : 'hiermit möchte ich mich nach einer passenden Unterkunft bei Ihnen für den nachfolgend genannten Zeitraum erkundigen.';
+  let body=[greeting,'',opening,'', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
   if(phone)body.push('Telefon: '+phone);
-  if(message)body.push('','NOCH EIN HINWEIS',''+message);
-  body.push('','Können Sie mir bitte mitteilen, ob etwas Passendes frei ist und wie hoch der Gesamtpreis für den Aufenthalt wäre?','','Vielen Dank und viele Grüße',''+firstName+' '+lastName);
+  if(message)body.push('','WEITERE ANGABEN',''+message);
+  body.push('','Bitte teilen Sie mir mit, ob Sie im genannten Zeitraum eine passende Unterkunft anbieten können und welcher Gesamtpreis für den Aufenthalt anfällt. Für geeignete Alternativangebote bin ich ebenfalls offen.','','Vielen Dank für Ihre Rückmeldung.','','Mit freundlichen Grüßen',''+firstName+' '+lastName);
   const subject=(selected?'Anfrage: '+selectedText:'Verfügbarkeitsanfrage')+' | '+a.name;
   const mailto='mailto:'+encodeURIComponent(a.contact_email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body.join('\n'));
   window.location.href=mailto;
