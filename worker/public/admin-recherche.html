@@ -165,13 +165,12 @@ function inferredFields(p){
  const valid=arr.filter(x=>!x.needs_identity_check);
  const all=valid.map(x=>String(x.content||'')).join('\n');
  const flat=all.replace(/\s+/g,' ').trim();
- const preferred=valid.find(x=>String(x.content||'').length>80)
-   ||valid[0];
- const sourceText=String(preferred?.content||'');
  const out={};
  const clean=s=>String(s||'').replace(/\s+/g,' ').trim().replace(/[|•,;]+$/,'');
- if(!p.name&&preferred?.title){
-   const title=clean(preferred.title).split(/[|•]/)[0].trim();
+ // Only the six requested search fields are populated. Do not infer type,
+ // booking URL, description, prices, or any other form field.
+ if(!p.name&&valid[0]?.title){
+   const title=clean(valid[0].title).split(/[|•]/)[0].trim();
    if(title&&title.length<120)out.name=title;
  }
  if(!p.contact_email){
@@ -185,9 +184,9 @@ function inferredFields(p){
  }
  const postal=flat.match(/\b(\d{5})[\s,–-]+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\s+(?:Deutschland|Telefon|Tel\.?|E-?Mail|Fax|\+49|$)|[,;])/i)
    ||flat.match(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/);
- if(postal){
+ if(!p.town&&postal){
    const town=clean(postal[2]).split(/\s+(?:Telefon|Tel\.?|E-?Mail|Fax|Öffnungszeiten)\b/i)[0];
-   if(!p.town&&town&&town.length<45)out.town=town;
+   if(town&&town.length<45)out.town=town;
  }
  if(!p.address){
    const streetRe=/\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{1,70}\b(?:straße|str\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer)\s+\d{1,4}[a-z]?\b/ig;
@@ -197,26 +196,13 @@ function inferredFields(p){
    else if(street&&postal)out.address=clean(street+', '+postal[1]+' '+postal[2]);
    else if(street)out.address=street;
  }
- if(!p.type){
-   const text=all.toLocaleLowerCase('de-DE');
-   const types=[['Ferienwohnungen',/ferienwohnungen|ferienwohnung/],['Ferienhaus',/ferienhaus|ferienhäuser/],['Hotel',/hotel|garni/],['Pension',/pension/],['Gasthof',/gasthof/],['Gasthaus',/gasthaus/],['Gästehaus',/gästehaus|gaestehaus/],['Privatzimmer',/privatzimmer|zimmervermietung/],['Bauernhof',/bauernhof|urlaub auf dem bauernhof/],['Campingplatz',/campingplatz|camping/]];
-   const found=types.find(([,re])=>re.test(text));if(found)out.type=found[0];
- }
  if(!p.website_url){
    const candidate=valid.find(x=>x.url&&/^https?:\/\//i.test(x.url));
    if(candidate)out.website_url=candidate.url;
  }
- // Booking portals are excluded from research; the contact/booking field stays blank
- // unless a contact page on the host's own domain is specifically identified.
- if(!p.description&&sourceText.length>250){
-   const text=clean(sourceText).replace(/\s+/g,' ');
-   const sentences=text.split(/(?<=[.!?])\s+/).filter(x=>x.length>35);
-   const description=sentences.slice(0,3).join(' ').slice(0,900);
-   if(description)out.description=description;
- }
  return out;
 }
-function prefill(card){const p=JSON.parse(card.dataset.payload||'{}');const guessed=inferredFields(p);const changedFields=[];for(const [key,value] of Object.entries(guessed)){const el=card.querySelector('[data-key="'+key+'"]');if(el&&!el.value.trim()){el.value=value;changedFields.push(key)}}const changed=changedFields.length;const messages=[];const fieldLabels={name:'Unterkunftsname',town:'Ort',address:'Adresse',type:'Art der Unterkunft',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Originalwebsite',booking_url:'Kontakt-/Buchungsseite',description:'Beschreibung'};if(changed)messages.push('Vorschläge aus den gefundenen Originalseiten eingetragen ('+changedFields.map(key=>fieldLabels[key]||key).join(', ')+').');else messages.push('Aus den gefundenen Originalseiten konnten noch keine neuen Formularangaben sicher erkannt werden. Bitte Suchquellen öffnen und die richtige Gastgeberseite prüfen.');card.querySelector('.feedback').textContent=messages.join(' ')+' Alle Angaben vor dem Speichern kontrollieren. Noch nicht veröffentlicht.'}
+function prefill(card){const guessed=inferredFields(JSON.parse(card.dataset.payload||'{}'));const changedFields=[];const labels={name:'Unterkunftsname',town:'Ort',address:'Adresse',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Website'};for(const [key,value] of Object.entries(guessed)){const el=card.querySelector('[data-key="'+key+'"]');if(el&&!el.value.trim()){el.value=value;changedFields.push(labels[key]||key)}}const feedback=card.querySelector('.feedback');feedback.textContent=changedFields.length?'Vorschläge für folgende Felder übernommen: '+changedFields.join(', ')+'. Bitte prüfen. Noch nicht veröffentlicht.':'Für die sechs Suchfelder wurden keine neuen Angaben sicher erkannt. Bitte Suchquellen anzeigen und die Treffer prüfen. Noch nicht veröffentlicht.'}
 function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
 function selectField(key,label,value){const options=['Ferienwohnung','Ferienwohnungen','Ferienhaus','Hotel','Pension','Gasthof','Gasthaus','Gästehaus','Privatzimmer','Bauernhof','Campingplatz','Hostel','Sonstiges'];const current=String(value||'');if(current&&!options.includes(current))options.unshift(current);return '<div><label>'+label+'</label><select data-key="'+key+'"><option value="">Bitte auswählen</option>'+options.map(option=>'<option value="'+esc(option)+'" '+(current===option?'selected':'')+'>'+esc(option)+'</option>')+'</select></div>'}
 function field(key,label,value,type,wide=false){return '<div class="'+(wide?'wide':'')+'"><label>'+label+'</label>'+(type==='textarea'?'<textarea data-key="'+key+'">'+esc(value||'')+'</textarea>':'<input data-key="'+key+'" type="'+type+'" value="'+esc(value||'')+'">')+'</div>'}
