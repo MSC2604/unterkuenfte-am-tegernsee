@@ -8,3 +8,7 @@ compatibility_date = "2026-10-21"
 binding = "DB"
 database_name = "unterkuenfte-session-test"
 database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
