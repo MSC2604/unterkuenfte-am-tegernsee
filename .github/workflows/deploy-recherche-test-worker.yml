@@ -73,3 +73,16 @@ jobs:
         run: |
           printf '%s' "$TAVILY_API_KEY" | wrangler secret put TAVILY_API_KEY --config wrangler.recherche-test.toml
           printf '%s' "$ADMIN_TOKEN" | wrangler secret put ADMIN_TOKEN --config wrangler.recherche-test.toml
+
+      - name: Testworker und isolierte Datenbank per Health-Check prüfen
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error https://unterkuenfte-recherche-test-api.msc4021.workers.dev/api/health; then
+              echo
+              exit 0
+            fi
+            echo "Testworker noch nicht erreichbar (Versuch $attempt/5)."
+            sleep 5
+          done
+          echo "::error::Der Testworker hat den Health-Check nicht bestanden."
+          exit 1
