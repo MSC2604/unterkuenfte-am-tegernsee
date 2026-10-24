@@ -182,42 +182,50 @@ function renderPublished(){
 }
 function inferredFields(p){
  const arr=Array.isArray(p.research_results)?p.research_results:[];
- const valid=arr.filter(x=>!x.needs_identity_check);
+ const valid=arr.filter(x=>!x.needs_identity_check&&x.url&&/^https?:\/\//i.test(x.url));
+ const hostOf=value=>{try{return new URL(value).hostname.toLowerCase().replace(/^www\./,'')}catch{return ''}};
+ // Kontaktangaben nur von derselben Website übernehmen, die als Unterkunftswebsite angezeigt wird.
+ // Treffer von Branchenverzeichnissen, Suchportalen oder fremden Unterkünften bleiben außen vor.
+ const website=String(p.website_url||'').trim();
+ const host=hostOf(website);
+ const official=host?valid.filter(x=>hostOf(x.url)===host||hostOf(x.url).endsWith('.'+host)): [];
  const isLegal=x=>/impressum|imprint|legal.?notice|kontakt/i.test(String(x.source_type||'')+' '+String(x.title||'')+' '+String(x.url||''));
- // Prefer legal/contact pages, but fall back to the matching original-site page
- // when the search provider did not return a separately labelled Impressum.
- const legal=valid.filter(isLegal);
- const preferred=legal.length?legal:valid;
+ const legal=official.filter(isLegal);
+ // Bei Kontaktdaten bevorzugt Impressum/Kontakt der offiziellen Website.
+ // Wenn keine solche Seite vorliegt, keine Adresse/E-Mail/Telefon aus beliebigen Treffern erraten.
+ const preferred=legal.length?legal:official;
  const all=preferred.map(x=>String(x.content||'')).join('\n');
  const flat=all.replace(/\s+/g,' ').trim();
  const out={};
  const clean=s=>String(s||'').replace(/\s+/g,' ').trim().replace(/^[,;|•\s]+|[,;|•\s]+$/g,'');
- if(!p.contact_email){
+ if(!p.contact_email&&legal.length){
    const matches=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[];
    const email=matches.find(x=>!/example\.|\.(?:png|jpg|jpeg|webp)$/i.test(x));
    if(email)out.contact_email=email.replace(/[),.;]+$/,'');
  }
- if(!p.contact_phone){
+ if(!p.contact_phone&&legal.length){
    const matches=all.match(/(?:\+49|0049|0)[\s()./-]*(?:\d[\s()./-]*){7,}/g)||[];
    const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
    if(phone)out.contact_phone=phone.raw;
  }
- const postalMatches=[...flat.matchAll(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\s+(?:Deutschland|Telefon|Tel\.?|E-?Mail|Fax|\+49|$)|[,;])/gi)];
- const postal=postalMatches.find(m=>!/^(?:Deutschland|Bayern|Germany)$/i.test(clean(m[2])))||flat.match(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/i);
- if(!p.town&&postal){
-   const town=clean(postal[2]).split(/\s+(?:Telefon|Tel\.?|E-?Mail|Fax|Öffnungszeiten|Deutschland)\b/i)[0];
-   if(town&&town.length<45)out.town=town;
- }
- if(!p.address){
-   const streetRe=/\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.'-]*(?:[ \u2011-]+[A-ZÄÖÜa-zäöüß.'-]+){0,5}\s+(?:straße|strasse|str\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer|allee)\s+\d{1,4}[a-z]?\b/ig;
-   const street=(all.match(streetRe)||[]).map(clean).find(x=>x.length<120);
-   const postalAddress=flat.match(/([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,75}\s+\d{1,4}[a-z]?)\s*,?\s*(\d{5}\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,40})/i);
-   if(postalAddress)out.address=clean(postalAddress[1]+', '+postalAddress[2]);
-   else if(street&&postal)out.address=clean(street+', '+postal[1]+' '+postal[2]);
-   else if(street)out.address=street;
+ if(legal.length){
+   const postalLine=all.match(/\b\d{5}\s*[-,]?\s*[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}/);
+   if(!p.town&&postalLine){
+     const m=postalLine[0].match(/\b\d{5}\s*[-,]?\s*(.+)$/);
+     if(m){const town=clean(m[1]).split(/\s+(?:Deutschland|Germany|Telefon|Tel\.?|E-?Mail|Fax)\b/i)[0].replace(/[,;]+$/,'');if(town&&town.length<45)out.town=town;}
+   }
+   if(!p.address){
+     const labelled=all.match(/(?:Anschrift|Adresse|Address)\s*:\s*([^\n\r]+)/i);
+     const streetRe=/\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.'-]*(?:[ \u2011-]+[A-ZÄÖÜa-zäöüß.'-]+){0,5}\s+(?:straße|strasse|str\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer|allee)\s+\d{1,4}[a-z]?\b/ig;
+     const street=(all.match(streetRe)||[]).map(clean).find(x=>x.length<120);
+     const postal=all.match(/\b(\d{5})\s*[-,]?\s*([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45})/);
+     if(labelled&&/\d/.test(labelled[1]))out.address=clean(labelled[1]);
+     else if(street&&postal)out.address=clean(street+', '+postal[1]+' '+clean(postal[2]).split(/\s+(?:Deutschland|Germany|Telefon|Tel\.?|E-?Mail|Fax)\b/i)[0]);
+     else if(street)out.address=street;
+   }
  }
  if(!p.website_url){
-   const candidate=valid.find(x=>x.url&&/^https?:\/\//i.test(x.url)&&!/impressum|imprint|legal[-_ ]?notice/i.test(x.url+' '+String(x.title||'')));
+   const candidate=valid.find(x=>x.url&&/^https?:\/\//i.test(x.url)&&!isLegal(x));
    if(candidate)out.website_url=candidate.url;
  }
  return out;
