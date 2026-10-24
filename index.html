@@ -511,7 +511,7 @@ function buildReservationDialog(){
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
   const generalText=kind==='apartment'?'welche Ihrer Ferienwohnungen':kind==='room'?'welche Zimmer in Ihrem Haus':'welche Unterkünfte oder Einheiten';
   const selectedPhrase=kind==='apartment'?'die Ferienwohnung':kind==='room'?'das Zimmer':'die Einheit';
-  const greeting='Hallo,';
+  const greeting='Sehr geehrte Damen und Herren,';
   const opening=selected
    ? 'ich interessiere mich für '+selectedPhrase+' „'+selectedText+'“ bei '+a.name+'. Ist sie im unten genannten Zeitraum verfügbar?'
    : 'ich interessiere mich für '+a.name+' und möchte gern wissen, '+generalText+' im unten genannten Zeitraum verfügbar sind.';
