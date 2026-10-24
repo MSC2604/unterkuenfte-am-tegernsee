@@ -364,8 +364,37 @@ export default {
             needs_identity_check: unrelated
           };
         });
+        // Fill only clearly labeled contact data from a same-domain legal notice.
+        // This happens server-side so the draft form receives the fields directly.
+        const nameTerms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i)
+          .filter(term => term.length >= 4 && !/ferienwohnungen?|unterkunft|gästehaus|gasthof|pension|hotel|am|der|die|das/.test(term));
+        const hostOf = value => { try { return new URL(value).hostname.toLowerCase().replace(/^www\\./, ""); } catch { return ""; } };
+        const usable = researchResults.filter(item => !item.needs_identity_check && item.url);
+        const candidate = usable.find(item => {
+          const text = (String(item.title || "") + " " + String(item.url || "")).toLowerCase();
+          return nameTerms.length && nameTerms.some(term => text.includes(term)) &&
+            !/impressum|imprint|legal.?notice|kontakt/i.test(String(item.title || "") + " " + String(item.url || ""));
+        });
+        const officialHost = candidate ? hostOf(candidate.url) : "";
+        const legalText = officialHost ? usable.filter(item =>
+          hostOf(item.url) === officialHost &&
+          /impressum|imprint|legal.?notice|kontakt/i.test(String(item.title || "") + " " + String(item.url || ""))
+        ).map(item => String(item.content || "")).join("\\n") : "";
+        const verifiedFields = {};
+        if (legalText) {
+          const emailMatch = legalText.match(/(?:E-?Mail|Email)\\s*:\\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})/i);
+          const phoneMatch = legalText.match(/(?:Telefon|Tel\\.?)\\s*:\\s*((?:\\+49|0049|0)[\\s()./-]*(?:\\d[\\s()./-]*){7,})/i);
+          const streetMatch = legalText.match(/(?:Anschrift|Adresse|Address)\\s*:\\s*([^\\n\\r]+)/i);
+          const postalMatch = legalText.match(/\\b(\\d{5})\\s*[-,]?\\s*([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45})/);
+          if (emailMatch) verifiedFields.contact_email = emailMatch[1].replace(/[),.;]+$/, "");
+          if (phoneMatch && phoneMatch[1].replace(/\\D/g, "").length >= 9) verifiedFields.contact_phone = phoneMatch[1].replace(/\\s+/g, " ").trim();
+          if (postalMatch) verifiedFields.town = postalMatch[2].split(/\\s+(?:Deutschland|Germany|Telefon|Tel\\.?|E-?Mail|Email|Fax)\\b/i)[0].replace(/[,;]+$/, "").trim();
+          if (streetMatch && /\\d/.test(streetMatch[1])) verifiedFields.address = streetMatch[1].replace(/\\s+/g, " ").trim();
+        }
+        if (candidate) verifiedFields.website_url = new URL(candidate.url).origin + "/";
         const payload = {
           name: query,
+          ...verifiedFields,
           research_status: results.length ? "results_found_needs_review" : "no_results",
           researched_at: new Date().toISOString(),
           prices_verified: false,
