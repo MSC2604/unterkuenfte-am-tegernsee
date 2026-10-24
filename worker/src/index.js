@@ -246,8 +246,9 @@ export default {
         if (!successfulSearches.length) {
           return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponses[0]?.status || 502 }, 502);
         }
-        const searchData = { results: successfulSearches.flatMap(result => result.results) };
-        const seenUrls = new Set();
+        let searchResults = successfulSearches.flatMap(result => result.results);
+        // Second pass: explicitly look for an Impressum on the most plausible own-site domains.
+        // Only domains already surfaced by name-matching search results are considered.
         const blockedDomains = [
           "tegernsee.com", "bayregio.de", "booking.com", "airbnb.com", "airbnb.de",
           "tripadvisor.com", "tripadvisor.de", "fewo-direkt.de", "vrbo.com",
@@ -260,6 +261,40 @@ export default {
           "pinterest.com", "youtube.com", "tiktok.com"
         ];
         const isBlockedHost = host => blockedDomains.some(domain => host === domain || host.endsWith("." + domain));
+        const initialMatches = searchResults.filter(item => {
+          try {
+            const host = new URL(item.url).hostname.toLowerCase().replace(/^www\\./, "");
+            const title = String(item.title || "").toLowerCase();
+            const qTerms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3);
+            return !isBlockedHost(host) && qTerms.some(term => title.includes(term));
+          } catch { return false; }
+        });
+        const likelyHosts = [...new Set(initialMatches.slice(0, 3).map(item => {
+          try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, ""); } catch { return ""; }
+        }).filter(Boolean))];
+        const impressumSearches = await Promise.all(likelyHosts.map(async host => {
+          try {
+            const response = await fetch("https://api.tavily.com/search", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                api_key: env.TAVILY_API_KEY,
+                query: 'site:' + host + ' Impressum Kontakt E-Mail Telefonnummer Adresse',
+                search_depth: "advanced",
+                max_results: 5,
+                include_answer: false
+              })
+            });
+            if (!response.ok) return [];
+            const data = await response.json();
+            return (Array.isArray(data.results) ? data.results : []).filter(item => {
+              try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, "") === host; } catch { return false; }
+            }).map(item => ({...item, _impressum_domain: host}));
+          } catch { return []; }
+        }));
+        searchResults = [...searchResults, ...impressumSearches.flat()];
+        const searchData = { results: searchResults };
+        const seenUrls = new Set();
         const rawResults = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
           if (typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) return false;
           try {
@@ -334,7 +369,7 @@ export default {
             content: String(extracted || item.content || "").slice(0, 12000),
             content_source: extracted ? "Originalseiteninhalt über Tavily ausgelesen" : "Suchauszug – Originalseiteninhalt nicht vollständig ausgelesen",
             published_date: typeof item.published_date === "string" ? item.published_date : null,
-            source_type: "Mögliche Originalwebsite – bitte Gastgeber-Zuordnung prüfen",
+            source_type: /impressum|imprint|legal-notice|legal_notice/i.test((url + " " + String(item.title || ""))) ? "Impressum/Kontaktseite – Angaben hier prüfen" : "Mögliche offizielle Website – Impressum noch nicht bestätigt",
             match_count: matchCount,
             needs_identity_check: unrelated
           };
