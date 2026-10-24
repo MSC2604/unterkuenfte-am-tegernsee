@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Unterkünfte – Recherche prüfen</title>
 <style>
 :root{color-scheme:light;--green:#2d6a56;--pale:#eef5f1;--ink:#20342c;--line:#d9e4de}
@@ -65,7 +68,7 @@ button.danger{background:#8a3434}
 <label for="token">Admin-Token</label><input id="token" type="password" autocomplete="off" placeholder="Nur bei neuer Anmeldung erforderlich">
 <button id="connect">Anmelden / Verwaltung laden</button><button id="logout" class="secondary" type="button">Abmelden</button><span id="sessionTimer" class="pill" aria-live="polite">Nicht angemeldet</span><button id="newSearch" class="secondary">Neue Webrecherche</button>
 <div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
-<div id="searchBox" class="hidden"><label for="query">Unterkunftsname oder Link von Tegernsee.com</label><input id="query" placeholder="Name oder https://www.tegernsee.com/..."><button id="runSearch">Recherche starten</button><p class="muted">Sucht ohne feste Personenzahl nach dem Gastgeber und möglichen Einheiten. Bis zu 8 unterschiedliche Treffer werden als Entwurf gesammelt. Preise und Verfügbarkeit sind dadurch nicht bestätigt.</p></div>
+<div id="searchBox" class="hidden"><label for="query">Unterkunftsname oder offizielle Website</label><input id="query" placeholder="z. B. Ferienwohnungen Pfatischer"><button id="runSearch">Recherche starten</button><p class="muted">Sucht nach der Unterkunft und ihrer eigenen Website. Automatisch recherchiert werden nur Name, Ort, Adresse, E-Mail, Telefon und Website. Verzeichnisse und Buchungsportale sollen nicht als Quelle dienen. Alle Angaben bleiben Entwürfe zur Prüfung.</p></div>
 </section>
 <section id="publishedSection" class="panel"><h2>2. Veröffentlichte Unterkünfte</h2><p class="muted">Hier kannst du veröffentlichte Kacheln samt allen zugehörigen Preisangeboten endgültig aus der Datenbank löschen.</p><div id="published"></div></section><section id="drafts"></section>
 </main>
