@@ -215,29 +215,38 @@ export default {
           return json({ error: "Bitte einen Unterkunftsnamen oder eine Website als query angeben." }, 400);
         }
         const query = body.query.trim().slice(0, 300);
-        let searchResponse;
-        try {
-          searchResponse = await fetch("https://api.tavily.com/search", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              api_key: env.TAVILY_API_KEY,
-              query: query + " Tegernsee Unterkunft Gastgeber Ferienwohnung Zimmer Apartment Ferienhaus offizielle Website Preise Kontakt",
-              search_depth: "basic",
-              max_results: 8,
-              include_answer: false
-            })
-          });
-        } catch {
-          return json({ error: "Der Suchanbieter ist momentan nicht erreichbar. Es wurde nichts gespeichert." }, 502);
+        // Run separate, targeted searches instead of relying on one broad query.
+        // This improves exact host matches and official Tegernsee directory coverage.
+        const queryVariants = [
+          query,
+          query + ' site:tegernsee.com',
+          query + ' offizielle Website Impressum Kontakt Adresse Telefon E-Mail'
+        ];
+        const searchResponses = await Promise.all(queryVariants.map(async searchQuery => {
+          try {
+            const response = await fetch("https://api.tavily.com/search", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                api_key: env.TAVILY_API_KEY,
+                query: searchQuery + " Tegernsee Unterkunft Ferienwohnung Gastgeber",
+                search_depth: "basic",
+                max_results: 8,
+                include_answer: false
+              })
+            });
+            if (!response.ok) return { ok: false, status: response.status, results: [] };
+            const data = await response.json();
+            return { ok: true, status: response.status, results: Array.isArray(data.results) ? data.results : [] };
+          } catch {
+            return { ok: false, status: 0, results: [] };
+          }
+        }));
+        const successfulSearches = searchResponses.filter(result => result.ok);
+        if (!successfulSearches.length) {
+          return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponses[0]?.status || 502 }, 502);
         }
-        if (!searchResponse.ok) {
-          return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponse.status }, 502);
-        }
-        let searchData;
-        try { searchData = await searchResponse.json(); } catch {
-          return json({ error: "Der Suchanbieter hat keine lesbare Antwort geliefert." }, 502);
-        }
+        const searchData = { results: successfulSearches.flatMap(result => result.results) };
         const seenUrls = new Set();
         const rawResults = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
           if (typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) return false;
@@ -286,7 +295,7 @@ export default {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 api_key: env.TAVILY_API_KEY,
-                urls: sources.slice(0, 4),
+                urls: sources.slice(0, 6),
                 extract_depth: "basic"
               })
             });
