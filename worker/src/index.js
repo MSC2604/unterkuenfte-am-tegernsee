@@ -321,15 +321,17 @@ export default {
           const matchedTerms = terms.filter(term => haystack.includes(term));
           const titleMatchCount = terms.filter(term => titleText.includes(term)).length;
           const matchCount = matchedTerms.length;
-          const unrelated = terms.length > 0 && titleMatchCount === 0 && matchCount === 0;
-          const weakIdentity = terms.length > 0 && titleMatchCount === 0 && matchCount > 0;
+          const isImpressum = /impressum|imprint|legal[-_ ]?notice/i.test(url + " " + title) || item._impressum_domain === host;
+          const unrelated = !isImpressum && terms.length > 0 && titleMatchCount === 0 && matchCount === 0;
+          const weakIdentity = !isImpressum && terms.length > 0 && titleMatchCount === 0 && matchCount > 0;
           const likelyHostSite = !isBlockedHost(host);
-          return { item, host, matchCount, titleMatchCount, likelyHostSite, unrelated, weakIdentity };
+          return { item, host, matchCount, titleMatchCount, likelyHostSite, unrelated, weakIdentity, isImpressum };
         });
         const directMatches = scored.filter(x => x.titleMatchCount > 0);
         const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.matchCount >= Math.min(2, terms.length)));
-        const candidateResults = directMatches.length ? relevant : scored.filter(x => !x.unrelated);
+        const candidateResults = scored.filter(x => x.isImpressum || (directMatches.length ? relevant.includes(x) : !x.unrelated));
         candidateResults.sort((a, b) =>
+          Number(b.isImpressum) - Number(a.isImpressum) ||
           Number(b.titleMatchCount > 0) - Number(a.titleMatchCount > 0) ||
           b.matchCount - a.matchCount
         );
