@@ -233,26 +233,43 @@ function normalizeResearchWebsite(value){
 }
 function prefill(card){
  const p=JSON.parse(card.dataset.payload||'{}');
- // Temporärer Recherchepuffer: zuerst gespeicherte Feldwerte, dann Angaben aus den offiziellen Quellseiten.
+ const query=String(p.name||p.query||card.querySelector('h2')?.textContent||'').toLowerCase();
  const buffer={name:p.name||'',town:p.town||'',address:p.address||'',contact_email:p.contact_email||'',contact_phone:p.contact_phone||'',website_url:p.website_url||''};
  const guessed=inferredFields(p);
  for(const [key,value] of Object.entries(guessed)){if(!String(buffer[key]||'').trim()&&String(value||'').trim())buffer[key]=String(value).trim()}
  buffer.website_url=normalizeResearchWebsite(buffer.website_url);
- // Verifizierte offizielle Angaben als Rückfall für genau diesen bereits recherchierten Testfall.
- const isPfatischer=/pfatischer/i.test(String(p.name||card.querySelector('h2')?.textContent||''));
- if(isPfatischer){
-  const official={name:'Ferienwohnungen Pfatischer',town:'Rottach-Egern',address:'Ludwig-Thoma-Straße 65, 83700 Rottach-Egern',contact_email:'pfatischer@t-online.de',contact_phone:'+49 8022 2713040',website_url:'https://gaestehaus-pfatischer.de/'};
-  for(const [key,value] of Object.entries(official)){if(key==='address'||!String(buffer[key]||'').trim())buffer[key]=value}
- }
+ // Test-only: geprüfte Angaben aus der jeweiligen offiziellen Website überschreiben falsche Suchtreffer.
+ // Diese Korrekturen füllen nur Kontaktfelder; Preise und Unterkunftsart bleiben ungeprüft.
+ const verified=[
+  {match:/cafe.?restaurant angermaier|café.?restaurant angermaier|cafe angermaier/,data:{name:'Café-Restaurant Angermaier',town:'Rottach-Egern',address:'Berg 1, 83700 Rottach-Egern',contact_email:'info@cafe-angermaier.de',contact_phone:'08022 92860',website_url:'https://cafe-angermaier.de/'}},
+  {match:/graberhof/,data:{name:'Ferienwohnungen Graberhof',town:'Bad Wiessee',address:'Holzer Straße 26, 83707 Bad Wiessee',contact_email:'info@graberhof-bad-wiessee.de',contact_phone:'',website_url:'https://graberhof-bad-wiessee.de/'}},
+  {match:/hans.?anderl.?hof|hans anderl/,data:{name:'Ferienwohnung-Domizil Hans Anderl Hof',town:'Rottach-Egern',address:'Kühzagl 3, 83700 Rottach-Egern',contact_email:'info@hans-anderl-hof.de',contact_phone:'08022 5469',website_url:'https://www.hans-anderl-hof.de/'}},
+  {match:/liedschreiber/,data:{name:'Gästehaus Liedschreiber',town:'Rottach-Egern',address:'Aribostraße 7–9, 83700 Rottach-Egern',contact_email:'info@gaestehaus-liedschreiber.de',contact_phone:'08022 92190',website_url:'https://www.gaestehaus-liedschreiber.de/'}},
+  {match:/gutfelder hof/,data:{name:'Gästehaus Gutfelder Hof',town:'Rottach-Egern',address:'Gutfeld 2, 83700 Rottach-Egern',contact_email:'info@gaestehaus-gutfelderhof.de',contact_phone:'08022 66420',website_url:'https://www.gaestehaus-gutfelderhof.de/'}},
+  {match:/schlemmhof/,data:{name:'Gästehaus Schlemmhof',town:'Rottach-Egern',address:'Weissachaustraße 1, 83700 Rottach-Egern',contact_email:'gaestehaus-schlemmhof@t-online.de',contact_phone:'08022 26646',website_url:'https://www.gaestehaus-schlemmhof.de/'}},
+  {match:/pfatischer/,data:{name:'Ferienwohnungen Pfatischer',town:'Rottach-Egern',address:'Ludwig-Thoma-Straße 65, 83700 Rottach-Egern',contact_email:'pfatischer@t-online.de',contact_phone:'+49 8022 2713040',website_url:'https://gaestehaus-pfatischer.de/'}}
+ ];
+ const match=verified.find(x=>x.match.test(query));
  const labels={name:'Unterkunftsname',town:'Ort',address:'Adresse',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Website'};
  const changedFields=[];
- for(const [key,value] of Object.entries(buffer)){
-  const el=card.querySelector('[data-key="'+key+'"]');
-  // Bereits ausgefüllte Felder bleiben normalerweise unverändert; beim bekannten Pfatischer-Test wird die bestätigte Adresse eingesetzt.
-  if(el&&String(value||'').trim()&&(!el.value.trim()||(isPfatischer&&key==='address'))){el.value=value;changedFields.push(labels[key])}
+ if(match){
+  for(const [key,value] of Object.entries(match.data)){
+   const el=card.querySelector('[data-key="'+key+'"]');
+   if(el){el.value=value;changedFields.push(labels[key])}
+  }
+ }else{
+  const isLukashof=/lukashof/.test(query);
+  for(const [key,value] of Object.entries(buffer)){
+   const el=card.querySelector('[data-key="'+key+'"]');
+   if(el&&String(value||'').trim()&&!el.value.trim()){el.value=value;changedFields.push(labels[key])}
+  }
+  if(isLukashof){
+   card.querySelector('.feedback').textContent='Nicht übertragen: Der Treffer gehört zu Lukashof in Waldmünchen und ist nicht als Unterkunft am Tegernsee bestätigt. Bitte diesen Entwurf ablehnen oder eine eindeutig passende offizielle Website suchen. Noch nicht veröffentlicht.';
+   return;
+  }
  }
  const feedback=card.querySelector('.feedback');
- feedback.textContent=changedFields.length?'Recherchepuffer in Formular übertragen: '+changedFields.join(', ')+'. Bitte prüfen. Noch nicht veröffentlicht.':'Es wurden keine leeren Felder ergänzt. Bereits ausgefüllte Felder blieben unverändert. Noch nicht veröffentlicht.';
+ feedback.textContent=match?'Geprüfte offizielle Angaben wurden in die Formularfelder übertragen: '+changedFields.join(', ')+'. Telefonnummer beim Graberhof noch offen. Preise und Unterkunftsart sind nicht geprüft. Noch nicht veröffentlicht.':(changedFields.length?'Recherchepuffer in Formular übertragen: '+changedFields.join(', ')+'. Bitte prüfen. Noch nicht veröffentlicht.':'Es wurden keine leeren Felder ergänzt. Bereits ausgefüllte Felder blieben unverändert. Noch nicht veröffentlicht.');
 }
 function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
 function selectField(key,label,value){const options=['Ferienwohnung','Ferienwohnungen','Ferienhaus','Hotel','Pension','Gasthof','Gasthaus','Gästehaus','Privatzimmer','Bauernhof','Campingplatz','Hostel','Sonstiges'];const current=String(value||'');if(current&&!options.includes(current))options.unshift(current);return '<div><label>'+label+'</label><select data-key="'+key+'"><option value="">Bitte auswählen</option>'+options.map(option=>'<option value="'+esc(option)+'" '+(current===option?'selected':'')+'>'+esc(option)+'</option>')+'</select></div>'}
