@@ -236,15 +236,23 @@ function prefill(card){
  const fields={name:p.name||'',town:p.town||'',address:p.address||'',contact_email:p.contact_email||'',contact_phone:p.contact_phone||'',website_url:p.website_url||''};
  const guessed=inferredFields(p);
  for(const [key,value] of Object.entries(guessed)){if(!String(fields[key]||'').trim()&&String(value||'').trim())fields[key]=String(value).trim()}
+ const labels={name:'Unterkunftsname',town:'Ort',address:'Adresse',contact_email:'E-Mail',contact_phone:'Telefon',website_url:'Website'};
  const changed=[];
  for(const [key,value] of Object.entries(fields)){
    const el=card.querySelector('[data-key="'+key+'"]');
-   if(el&&String(value||'').trim()&&!el.value.trim()){el.value=value;changed.push(key)}
+   if(el&&String(value||'').trim()&&!el.value.trim()){el.value=value;changed.push(labels[key]||key)}
  }
+ const missing=['Ort','Adresse','E-Mail','Telefon','Website'].filter(label=>{
+   const key=Object.keys(labels).find(k=>labels[k]===label);
+   const el=card.querySelector('[data-key="'+key+'"]');
+   return !el||!String(el.value||'').trim();
+ });
  const feedback=card.querySelector('.feedback');
- feedback.textContent=card.dataset.id
-   ?(changed.length?'Recherchevorschläge ergänzt: '+changed.join(', ')+'. Bitte Quellen prüfen. Noch nicht veröffentlicht.':'Bereits ausgefüllte Felder bleiben unverändert. Bitte Quellen prüfen. Noch nicht veröffentlicht.')
-   :(changed.length?'Rechercheergebnis direkt in die Formularfelder übernommen: '+changed.join(', ')+'. Noch nicht gespeichert; bitte Quellen prüfen.':'Recherche abgeschlossen. Bitte Quellen öffnen und fehlende Angaben ergänzen. Noch nicht gespeichert.');
+ const base=changed.length
+   ?'Gefundene Angaben übernommen: '+changed.join(', ')+'.'
+   :'Es konnten keine zusätzlichen Angaben sicher übernommen werden.';
+ const missingText=missing.length?' Noch nicht gefunden: '+missing.join(', ')+'.':' Alle fünf Angaben sind ausgefüllt.';
+ feedback.textContent=base+missingText+' Bitte Quellen prüfen. Noch nicht gespeichert.';
 }
 function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
 function selectField(key,label,value){const options=['Ferienwohnung','Ferienwohnungen','Ferienhaus','Hotel','Pension','Gasthof','Gasthaus','Gästehaus','Privatzimmer','Bauernhof','Campingplatz','Hostel','Sonstiges'];const current=String(value||'');if(current&&!options.includes(current))options.unshift(current);return '<div><label>'+label+'</label><select data-key="'+key+'"><option value="">Bitte auswählen</option>'+options.map(option=>'<option value="'+esc(option)+'" '+(current===option?'selected':'')+'>'+esc(option)+'</option>')+'</select></div>'}
