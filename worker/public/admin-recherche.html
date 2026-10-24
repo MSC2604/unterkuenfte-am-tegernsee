@@ -183,41 +183,41 @@ function renderPublished(){
 function inferredFields(p){
  const arr=Array.isArray(p.research_results)?p.research_results:[];
  const valid=arr.filter(x=>!x.needs_identity_check);
- // Contact details are proposed only from a result explicitly identified as an Impressum page.
- const impressum=valid.filter(x=>/impressum|imprint|legal notice/i.test(String(x.source_type||'')));
- const contactText=impressum.map(x=>String(x.content||'')).join('\n');
- const all=contactText;
- const flat=all.replace(/\s+/g,' ').trim();
+ const isLegal=x=>/impressum|imprint|legal.?notice|kontakt/i.test(String(x.source_type||'')+' '+String(x.title||'')+' '+String(x.url||''));
+ // Prefer legal/contact pages, but fall back to the matching original-site page
+ // when the search provider did not return a separately labelled Impressum.
+ const legal=valid.filter(isLegal);
+ const preferred=legal.length?legal:valid;
+ const all=preferred.map(x=>String(x.content||'')).join('\n');
+ const flat=all.replace(/\\s+/g,' ').trim();
  const out={};
- const clean=s=>String(s||'').replace(/\s+/g,' ').trim().replace(/[|•,;]+$/,'');
- // Only the six requested search fields are populated. Do not infer type,
- // booking URL, description, prices, or any other form field.
- // Keep the searched accommodation name as entered; do not replace it with a search-result title.
+ const clean=s=>String(s||'').replace(/\\s+/g,' ').trim().replace(/^[,;|•\\s]+|[,;|•\\s]+$/g,'');
  if(!p.contact_email){
-   const m=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-   if(m&&!/example\.|\.png$|\.jpg$/i.test(m[0]))out.contact_email=m[0];
+   const matches=all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig)||[];
+   const email=matches.find(x=>!/example\\.|\\.(?:png|jpg|jpeg|webp)$/i.test(x));
+   if(email)out.contact_email=email.replace(/[),.;]+$/,'');
  }
  if(!p.contact_phone){
-   const matches=all.match(/(?:\+49|0049|0)[\s()./-]*(?:\d[\s()./-]*){7,}/g)||[];
-   const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
+   const matches=all.match(/(?:\\+49|0049|0)[\\s()./-]*(?:\\d[\\s()./-]*){7,}/g)||[];
+   const phone=matches.map(x=>({raw:clean(x),digits:x.replace(/\\D/g,'')})).find(x=>x.digits.length>=9&&x.digits.length<=15);
    if(phone)out.contact_phone=phone.raw;
  }
- const postal=flat.match(/\b(\d{5})[\s,–-]+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\s+(?:Deutschland|Telefon|Tel\.?|E-?Mail|Fax|\+49|$)|[,;])/i)
-   ||flat.match(/\b(\d{5})\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/);
+ const postalMatches=[...flat.matchAll(/\\b(\\d{5})\\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,45}?)(?=\\s+(?:Deutschland|Telefon|Tel\\.?|E-?Mail|Fax|\\+49|$)|[,;])/gi)];
+ const postal=postalMatches.find(m=>!/^(?:Deutschland|Bayern|Germany)$/i.test(clean(m[2])))||flat.match(/\\b(\\d{5})\\s+([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,35})/i);
  if(!p.town&&postal){
-   const town=clean(postal[2]).split(/\s+(?:Telefon|Tel\.?|E-?Mail|Fax|Öffnungszeiten)\b/i)[0];
+   const town=clean(postal[2]).split(/\\s+(?:Telefon|Tel\\.?|E-?Mail|Fax|Öffnungszeiten|Deutschland)\\b/i)[0];
    if(town&&town.length<45)out.town=town;
  }
  if(!p.address){
-   const streetRe=/\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{1,70}\b(?:straße|str\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer)\s+\d{1,4}[a-z]?\b/ig;
+   const streetRe=/\\b[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.'-]*(?:[ \\u2011-]+[A-ZÄÖÜa-zäöüß.'-]+){0,5}\\s+(?:straße|strasse|str\\.?|weg|platz|gasse|berg|rain|feld|hof|chaussee|ufer|allee)\\s+\\d{1,4}[a-z]?\\b/ig;
    const street=(all.match(streetRe)||[]).map(clean).find(x=>x.length<120);
-   const postalAddress=flat.match(/([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,75}\s+\d{1,4}[a-z]?)\s*,?\s*(\d{5}\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,40})/i);
+   const postalAddress=flat.match(/([A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,75}\\s+\\d{1,4}[a-z]?)\\s*,?\\s*(\\d{5}\\s+[A-ZÄÖÜ][A-ZÄÖÜa-zäöüß.' -]{2,40})/i);
    if(postalAddress)out.address=clean(postalAddress[1]+', '+postalAddress[2]);
    else if(street&&postal)out.address=clean(street+', '+postal[1]+' '+postal[2]);
    else if(street)out.address=street;
  }
  if(!p.website_url){
-   const candidate=valid.find(x=>x.url&&/^https?:\/\//i.test(x.url)&&!/impressum|imprint|legal[-_ ]?notice/i.test(x.url+' '+String(x.title||'')));
+   const candidate=valid.find(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!/impressum|imprint|legal[-_ ]?notice/i.test(x.url+' '+String(x.title||'')));
    if(candidate)out.website_url=candidate.url;
  }
  return out;
