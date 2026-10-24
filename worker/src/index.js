@@ -217,36 +217,23 @@ export default {
         const query = body.query.trim().slice(0, 300);
         // Search for the property's own website and its real contact details.
         // Regional directories, listing portals and booking marketplaces are deliberately excluded.
-        const queryVariants = [
-          '"' + query + '" offizielle Website Impressum Kontakt Adresse Telefon E-Mail',
-          '"' + query + '" Telefonnummer E-Mail Straße Ort',
-          '"' + query + '" Ferienwohnung Gastgeber Homepage Kontakt'
-        ];
-        const searchResponses = await Promise.all(queryVariants.map(async searchQuery => {
-          try {
-            const response = await fetch("https://api.tavily.com/search", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                api_key: env.TAVILY_API_KEY,
-                query: searchQuery,
-                search_depth: "advanced",
-                max_results: 10,
-                include_answer: false
-              })
-            });
-            if (!response.ok) return { ok: false, status: response.status, results: [] };
-            const data = await response.json();
-            return { ok: true, status: response.status, results: Array.isArray(data.results) ? data.results : [] };
-          } catch {
-            return { ok: false, status: 0, results: [] };
-          }
-        }));
-        const successfulSearches = searchResponses.filter(result => result.ok);
-        if (!successfulSearches.length) {
-          return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponses[0]?.status || 502 }, 502);
+        // Eine gezielte Suche statt drei paralleler Suchanfragen: schneller und weniger API-Verbrauch.
+        const searchResponse = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            api_key: env.TAVILY_API_KEY,
+            query: '"' + query + '" offizielle Website Impressum Kontakt E-Mail Telefon Adresse',
+            search_depth: "basic",
+            max_results: 8,
+            include_answer: false
+          })
+        });
+        if (!searchResponse.ok) {
+          return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponse.status }, 502);
         }
-        let searchResults = successfulSearches.flatMap(result => result.results);
+        const searchDataInitial = await searchResponse.json();
+        let searchResults = Array.isArray(searchDataInitial.results) ? searchDataInitial.results : [];
         // Second pass: explicitly look for an Impressum on the most plausible own-site domains.
         // Only domains already surfaced by name-matching search results are considered.
         const blockedDomains = [
@@ -270,7 +257,7 @@ export default {
             return !isBlockedHost(host) && qTerms.some(term => title.includes(term));
           } catch { return false; }
         });
-        const likelyHosts = [...new Set(initialMatches.slice(0, 3).map(item => {
+        const likelyHosts = [...new Set(initialMatches.slice(0, 1).map(item => {
           try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, ""); } catch { return ""; }
         }).filter(Boolean))];
         const impressumSearches = await Promise.all(likelyHosts.map(async host => {
@@ -281,8 +268,8 @@ export default {
               body: JSON.stringify({
                 api_key: env.TAVILY_API_KEY,
                 query: 'site:' + host + ' Impressum Kontakt E-Mail Telefonnummer Adresse',
-                search_depth: "advanced",
-                max_results: 5,
+                search_depth: "basic",
+                max_results: 4,
                 include_answer: false
               })
             });
@@ -337,7 +324,7 @@ export default {
           b.matchCount - a.matchCount
         );
         const results = candidateResults.slice(0, 8);
-        const sources = results.map(x => x.item.url).slice(0, 6);
+        const sources = results.map(x => x.item.url).slice(0, 3);
         // Extract real page text so address, email and telephone can be proposed from the source.
         const extractedByUrl = new Map();
         if (sources.length) {
@@ -347,8 +334,8 @@ export default {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 api_key: env.TAVILY_API_KEY,
-                urls: sources.slice(0, 6),
-                extract_depth: "advanced"
+                urls: sources.slice(0, 3),
+                extract_depth: "basic"
               })
             });
             if (extractResponse.ok) {
