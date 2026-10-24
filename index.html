@@ -160,6 +160,7 @@ footer strong{color:var(--navy)}
 }
 
 
+.result-card-body>.minimum-stay{margin:6px 0 0;font-size:13px;font-weight:650;color:#244a79}
 /* Unterkunftskacheln mit Bild und ausklappbaren Details */
 .results-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
 .result-card{padding:0;overflow:hidden;border:1px solid #dfe6ef;border-radius:20px;background:#fff;box-shadow:0 8px 24px rgba(36,74,121,.08)}
@@ -556,7 +557,7 @@ function accommodationCard(a){
  const validPrices=prices.filter(p=>!p.price_on_request&&p.price_amount!==null&&p.price_amount!==undefined&&p.price_amount!=='');
  const lowest=validPrices.length?Math.min(...validPrices.map(p=>Number(p.price_amount))):null;
  const lowestOffer=validPrices.find(p=>Number(p.price_amount)===lowest);
- const priceLine=lowest===null?'Preis auf Anfrage':'ab '+money(lowest,lowestOffer?.currency||'EUR');
+ const priceLine=lowest===null?'Preis auf Anfrage':((lowestOffer?.show_price_ab===false||lowestOffer?.show_price_ab===0||lowestOffer?.show_price_ab==='0'?'':'ab ')+money(lowest,lowestOffer?.currency||'EUR'));
  const description=String(a.description||'');
  const summary=description.length>125?description.slice(0,122).trimEnd()+'…':description;
  const photo=typeof a.image_url==='string'&&(/^https:\/\//i.test(a.image_url)||/^data:image\/(jpeg|webp|png);base64,/i.test(a.image_url))?'<img class="result-photo" src="'+esc(a.image_url)+'" alt="Bild von '+esc(a.name)+'" loading="lazy" referrerpolicy="no-referrer">':'<div class="result-photo-placeholder" role="img" aria-label="Noch kein Unterkunftsfoto hinterlegt"><span class="house-icon" aria-hidden="true">⌂</span><strong>'+esc(a.type||'Unterkunft')+'</strong><small>Unterkunftsfoto folgt</small></div>';
@@ -566,7 +567,7 @@ function accommodationCard(a){
  if(a.contact_email)actions.push('<a href="mailto:'+esc(a.contact_email)+'">E-Mail</a>');
  if(a.website_url)actions.push('<a class="primary" href="'+esc(a.website_url)+'" target="_blank" rel="noopener noreferrer">Website öffnen</a>');
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
- const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
+ const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+'</div>'+(lowestOffer&&Number(lowestOffer.min_nights)>=2&&Number(lowestOffer.min_nights)<=7?'<p class="result-note minimum-stay">Mindestaufenthalt '+esc(String(Number(lowestOffer.min_nights)))+' Tage</p>':'')+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
 }
 const galleryLightbox=document.createElement('div');
 galleryLightbox.className='gallery-lightbox';
