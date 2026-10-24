@@ -234,6 +234,8 @@ function normalizeResearchWebsite(value){
 function prefill(card){
  const p=JSON.parse(card.dataset.payload||'{}');
  const fields={name:p.name||'',town:p.town||'',address:p.address||'',contact_email:p.contact_email||'',contact_phone:p.contact_phone||'',website_url:p.website_url||''};
+ const guessed=inferredFields(p);
+ for(const [key,value] of Object.entries(guessed)){if(!String(fields[key]||'').trim()&&String(value||'').trim())fields[key]=String(value).trim()}
  const changed=[];
  for(const [key,value] of Object.entries(fields)){
    const el=card.querySelector('[data-key="'+key+'"]');
