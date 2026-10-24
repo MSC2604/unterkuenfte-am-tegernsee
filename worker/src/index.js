@@ -538,7 +538,14 @@ export default {
         batch.push(env.DB.prepare(
           "UPDATE research_drafts SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'"
         ).bind(draftId));
-        await env.DB.batch(batch);
+        try {
+          await env.DB.batch(batch);
+        } catch (error) {
+          // Return a JSON response with CORS headers instead of an opaque browser "Failed to fetch".
+          // This makes the actual database/schema error visible in the admin review screen.
+          const detail = error && typeof error.message === "string" ? error.message.slice(0, 500) : "Unbekannter Datenbankfehler";
+          return json({ error: "Veröffentlichung fehlgeschlagen: " + detail }, 500);
+        }
         return json({ success: true, accommodation_id: accommodationId, prices_saved: prices.length });
       }
     }
