@@ -215,34 +215,80 @@ export default {
           return json({ error: "Bitte einen Unterkunftsnamen oder eine Website als query angeben." }, 400);
         }
         const query = body.query.trim().slice(0, 300);
-        let searchResponse;
-        try {
-          searchResponse = await fetch("https://api.tavily.com/search", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              api_key: env.TAVILY_API_KEY,
-              query: query + " Tegernsee Unterkunft Gastgeber Ferienwohnung Zimmer Apartment Ferienhaus offizielle Website Preise Kontakt",
-              search_depth: "basic",
-              max_results: 8,
-              include_answer: false
-            })
-          });
-        } catch {
-          return json({ error: "Der Suchanbieter ist momentan nicht erreichbar. Es wurde nichts gespeichert." }, 502);
-        }
+        // Search for the property's own website and its real contact details.
+        // Regional directories, listing portals and booking marketplaces are deliberately excluded.
+        // Eine gezielte Suche statt drei paralleler Suchanfragen: schneller und weniger API-Verbrauch.
+        const searchResponse = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            api_key: env.TAVILY_API_KEY,
+            query: '"' + query + '" offizielle Website Impressum Kontakt E-Mail Telefon Adresse',
+            search_depth: "basic",
+            max_results: 8,
+            include_answer: false
+          })
+        });
         if (!searchResponse.ok) {
           return json({ error: "Die Websuche ist fehlgeschlagen. Bitte Kontingent und API-Schlüssel prüfen.", provider_status: searchResponse.status }, 502);
         }
-        let searchData;
-        try { searchData = await searchResponse.json(); } catch {
-          return json({ error: "Der Suchanbieter hat keine lesbare Antwort geliefert." }, 502);
-        }
+        const searchDataInitial = await searchResponse.json();
+        let searchResults = Array.isArray(searchDataInitial.results) ? searchDataInitial.results : [];
+        // Second pass: explicitly look for an Impressum on the most plausible own-site domains.
+        // Only domains already surfaced by name-matching search results are considered.
+        const blockedDomains = [
+          "tegernsee.com", "bayregio.de", "booking.com", "airbnb.com", "airbnb.de",
+          "tripadvisor.com", "tripadvisor.de", "fewo-direkt.de", "vrbo.com",
+          "traum-ferienwohnungen.de", "holidu.de", "e-domizil.de", "hometogo.de",
+          "ferienwohnungen.de", "ferienhausmiete.de", "expedia.com", "hotels.com",
+          "agoda.com", "kayak.com", "trivago.de", "hrs.de", "hotel.de",
+          "holidaycheck.de", "google.com", "maps.google.com", "yelp.com",
+          "ds-destinationsolutions.com", "holidays.hrs.de", "tiscover.com", "im-web.de",
+          "meinestadt.de", "11880.com", "dasoertliche.de", "gelbeseiten.de",
+          "golocal.de", "werkenntdenbesten.de", "facebook.com", "instagram.com",
+          "pinterest.com", "youtube.com", "tiktok.com"
+        ];
+        const isBlockedHost = host => blockedDomains.some(domain => host === domain || host.endsWith("." + domain));
+        const initialMatches = searchResults.filter(item => {
+          try {
+            const host = new URL(item.url).hostname.toLowerCase().replace(/^www\\./, "");
+            const title = String(item.title || "").toLowerCase();
+            const qTerms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3);
+            return !isBlockedHost(host) && qTerms.some(term => title.includes(term));
+          } catch { return false; }
+        });
+        const likelyHosts = [...new Set(initialMatches.slice(0, 1).map(item => {
+          try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, ""); } catch { return ""; }
+        }).filter(Boolean))];
+        const impressumSearches = await Promise.all(likelyHosts.map(async host => {
+          try {
+            const response = await fetch("https://api.tavily.com/search", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                api_key: env.TAVILY_API_KEY,
+                query: 'site:' + host + ' Impressum Kontakt E-Mail Telefonnummer Adresse',
+                search_depth: "basic",
+                max_results: 4,
+                include_answer: false
+              })
+            });
+            if (!response.ok) return [];
+            const data = await response.json();
+            return (Array.isArray(data.results) ? data.results : []).filter(item => {
+              try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, "") === host; } catch { return false; }
+            }).map(item => ({...item, _impressum_domain: host}));
+          } catch { return []; }
+        }));
+        searchResults = [...searchResults, ...impressumSearches.flat()];
+        const searchData = { results: searchResults };
         const seenUrls = new Set();
         const rawResults = (Array.isArray(searchData.results) ? searchData.results : []).filter(item => {
           if (typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) return false;
           try {
             const u = new URL(item.url);
+            const host = u.hostname.toLowerCase().replace(/^www\./, "");
+            if (isBlockedHost(host)) return false;
             u.hash = "";
             for (const key of ["utm_source", "utm_medium", "utm_campaign", "gclid"]) u.searchParams.delete(key);
             const normalized = u.href.replace(/\/$/, "").toLowerCase();
@@ -251,11 +297,11 @@ export default {
             return true;
           } catch { return false; }
         });
-        const stopTerms = ["ferienwohnung", "ferienwohnungen", "unterkunft", "unterkünfte", "tegernsee", "finden", "suche", "gastgeber", "zimmer", "apartment", "apartments", "ferienhaus", "preise", "kontakt", "offizielle", "website"];
+        const stopTerms = ["ferienwohnung", "ferienwohnungen", "unterkunft", "unterkünfte", "tegernsee", "finden", "suche", "gastgeber", "zimmer", "apartment", "apartments", "ferienhaus", "preise", "kontakt", "offizielle", "website", "impressum", "telefon", "adresse", "e-mail"];
         const terms = query.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(x => x.length >= 3 && !stopTerms.includes(x));
         const scored = rawResults.map(item => {
           const url = String(item.url || "");
-          const host = (() => { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } })();
+          const host = (() => { try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; } })();
           const title = String(item.title || "");
           const content = String(item.content || "");
           const titleText = (title + " " + url).toLowerCase();
@@ -263,28 +309,61 @@ export default {
           const matchedTerms = terms.filter(term => haystack.includes(term));
           const titleMatchCount = terms.filter(term => titleText.includes(term)).length;
           const matchCount = matchedTerms.length;
-          const officialTegernsee = host === "tegernsee.com" || host.endsWith(".tegernsee.com");
-          const likelyHostSite = !["bayregio.de", "booking.com", "airbnb.de", "tripadvisor.de"].some(domain => host === domain || host.endsWith("." + domain));
-          // When a name was provided, matches in the title/URL are stronger evidence than incidental mentions in long snippets.
-          const unrelated = terms.length > 0 && titleMatchCount === 0 && matchCount === 0;
-          const weakIdentity = terms.length > 0 && titleMatchCount === 0 && matchCount > 0;
-          return { item, host, matchCount, titleMatchCount, officialTegernsee, likelyHostSite, unrelated, weakIdentity };
+          const isImpressum = /impressum|imprint|legal[-_ ]?notice/i.test(url + " " + title) || item._impressum_domain === host;
+          const unrelated = !isImpressum && terms.length > 0 && titleMatchCount === 0 && matchCount === 0;
+          const weakIdentity = !isImpressum && terms.length > 0 && titleMatchCount === 0 && matchCount > 0;
+          const likelyHostSite = !isBlockedHost(host);
+          return { item, host, matchCount, titleMatchCount, likelyHostSite, unrelated, weakIdentity, isImpressum };
         });
-        // Prefer direct name matches. Keep official regional directory entries as reviewable sources,
-        // but do not pad a property-specific draft with unrelated nearby accommodation listings.
-        const directMatches = scored.filter(x => x.titleMatchCount > 0 || x.officialTegernsee && x.matchCount > 0);
-        const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.officialTegernsee || x.matchCount >= Math.min(2, terms.length)));
-        const results = (directMatches.length ? relevant : scored.filter(x => !x.unrelated)).slice(0, 8);
-        const sources = results.map(x => x.item.url).slice(0, 8);
-        const researchResults = results.map(({ item, host, matchCount, officialTegernsee, likelyHostSite, unrelated }) => ({
-          title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
-          url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "",
-          content: typeof item.content === "string" ? item.content.slice(0, 1600) : "",
-          published_date: typeof item.published_date === "string" ? item.published_date : null,
-          source_type: officialTegernsee ? "Tegernsee.com – Gastgeberquelle" : (likelyHostSite ? "Mögliche Gastgeber- oder Buchungsseite" : "Drittanbieter – Zuordnung prüfen"),
-          match_count: matchCount,
-          needs_identity_check: unrelated
-        }));
+        const directMatches = scored.filter(x => x.titleMatchCount > 0);
+        const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.matchCount >= Math.min(2, terms.length)));
+        const candidateResults = scored.filter(x => x.isImpressum || (directMatches.length ? relevant.includes(x) : !x.unrelated));
+        candidateResults.sort((a, b) =>
+          Number(b.isImpressum) - Number(a.isImpressum) ||
+          Number(b.titleMatchCount > 0) - Number(a.titleMatchCount > 0) ||
+          b.matchCount - a.matchCount
+        );
+        const results = candidateResults.slice(0, 8);
+        const sources = results.map(x => x.item.url).slice(0, 3);
+        // Extract real page text so address, email and telephone can be proposed from the source.
+        const extractedByUrl = new Map();
+        if (sources.length) {
+          try {
+            const extractResponse = await fetch("https://api.tavily.com/extract", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                api_key: env.TAVILY_API_KEY,
+                urls: sources.slice(0, 3),
+                extract_depth: "basic"
+              })
+            });
+            if (extractResponse.ok) {
+              const extractData = await extractResponse.json();
+              for (const extracted of (Array.isArray(extractData.results) ? extractData.results : [])) {
+                if (typeof extracted.url === "string" && typeof extracted.raw_content === "string" && extracted.raw_content.trim()) {
+                  extractedByUrl.set(extracted.url, extracted.raw_content.trim().slice(0, 12000));
+                }
+              }
+            }
+          } catch {
+            // Keep the search excerpt when full page extraction is unavailable.
+          }
+        }
+        const researchResults = results.map(({ item, host, matchCount, likelyHostSite, unrelated }) => {
+          const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : "";
+          const extracted = extractedByUrl.get(url);
+          return {
+            title: typeof item.title === "string" ? item.title.slice(0, 500) : "",
+            url,
+            content: String(extracted || item.content || "").slice(0, 12000),
+            content_source: extracted ? "Originalseiteninhalt über Tavily ausgelesen" : "Suchauszug – Originalseiteninhalt nicht vollständig ausgelesen",
+            published_date: typeof item.published_date === "string" ? item.published_date : null,
+            source_type: /impressum|imprint|legal-notice|legal_notice/i.test((url + " " + String(item.title || ""))) ? "Impressum/Kontaktseite – Angaben hier prüfen" : "Mögliche offizielle Website – Impressum noch nicht bestätigt",
+            match_count: matchCount,
+            needs_identity_check: unrelated
+          };
+        });
         const draftId = id();
         const payload = {
           name: query,

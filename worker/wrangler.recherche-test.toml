@@ -1,0 +1,14 @@
+name = "unterkuenfte-recherche-test-api"
+main = "src/index.js"
+compatibility_date = "2026-10-21"
+
+
+# Ausschließlich die isolierte Testdatenbank verwenden.
+[[d1_databases]]
+binding = "DB"
+database_name = "unterkuenfte-session-test"
+database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"

@@ -1,0 +1,97 @@
+name: Unterkunftsrecherche sicher testen
+
+on:
+  push:
+    branches: ["fix/unterkunft-recherche-details"]
+    paths:
+      - "worker/src/index.js"
+      - "worker/public/**"
+      - "worker/wrangler.recherche-test.toml"
+      - "worker/public/**"
+      - "database/schema.sql"
+      - ".github/workflows/deploy-recherche-test-worker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unterkuenfte-recherche-test-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy-test:
+    name: Separaten Recherche-Testworker bereitstellen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Testkonfiguration auf Trennung von Produktion prüfen
+        run: |
+          grep -F 'name = "unterkuenfte-recherche-test-api"' worker/wrangler.recherche-test.toml
+          grep -F 'database_name = "unterkuenfte-session-test"' worker/wrangler.recherche-test.toml
+          grep -F 'database_id = "66ea1222-1866-48ac-bdc2-2be7b41c1d80"' worker/wrangler.recherche-test.toml
+          ! grep -F 'd7bdc69e-4610-402f-9154-0c0e13f46022' worker/wrangler.recherche-test.toml
+          ! grep -F 'unterkuenfte-am-tegernsee-api' worker/wrangler.recherche-test.toml
+
+      - name: Erforderliche Secrets prüfen, bevor irgendetwas bereitgestellt wird
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TAVILY_API_KEY ADMIN_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Das GitHub Actions Secret $name fehlt. Es wurde noch nichts bereitgestellt."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Wrangler installieren
+        run: npm install --global wrangler
+
+      - name: Schema ausschließlich in der isolierten Testdatenbank vorbereiten
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler d1 execute unterkuenfte-session-test --remote --file ../database/schema.sql --config wrangler.recherche-test.toml
+
+      - name: Separaten Testworker bereitstellen
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy --config wrangler.recherche-test.toml
+
+      - name: Tavily- und Admin-Schlüssel nur am Testworker setzen
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          printf '%s' "$TAVILY_API_KEY" | wrangler secret put TAVILY_API_KEY --config wrangler.recherche-test.toml
+          printf '%s' "$ADMIN_TOKEN" | wrangler secret put ADMIN_TOKEN --config wrangler.recherche-test.toml
+
+      - name: Testworker und isolierte Datenbank per Health-Check prüfen
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error https://unterkuenfte-recherche-test-api.msc4021.workers.dev/api/health; then
+              echo
+              exit 0
+            fi
+            echo "Testworker noch nicht erreichbar (Versuch $attempt/5)."
+            sleep 5
+          done
+          echo "::error::Der Testworker hat den Health-Check nicht bestanden."
+          exit 1
