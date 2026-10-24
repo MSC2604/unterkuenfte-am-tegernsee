@@ -5,7 +5,7 @@ on:
     branches: ["main"]
     paths:
       - "worker/src/index.js"
-      - "admin.html"
+      - "worker/public/admin-recherche.html"
       - ".github/workflows/check-research-pr.yml"
   push:
     branches: ["fix/unterkunft-recherche-details"]
@@ -30,7 +30,7 @@ jobs:
           node-version: "22"
       - name: Worker-Syntax prüfen
         run: node --input-type=module --check < worker/src/index.js
-      - name: JavaScript in admin.html prüfen
+      - name: JavaScript in admin-recherche.html prüfen
         run: |
           python3 - <<'PY'
           from html.parser import HTMLParser
@@ -56,7 +56,7 @@ jobs:
                       self.in_script = False
 
           parser = Scripts()
-          parser.feed(Path("admin.html").read_text(encoding="utf-8"))
+          parser.feed(Path("worker/public/admin-recherche.html").read_text(encoding="utf-8"))
           inline = [s for s in parser.scripts if s.strip()]
           if not inline:
               raise SystemExit("Keine Inline-Skripte zum Prüfen gefunden.")
