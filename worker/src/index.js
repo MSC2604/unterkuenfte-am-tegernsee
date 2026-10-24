@@ -256,6 +256,7 @@ export default {
           "ferienwohnungen.de", "ferienhausmiete.de", "expedia.com", "hotels.com",
           "agoda.com", "kayak.com", "trivago.de", "hrs.de", "hotel.de",
           "holidaycheck.de", "google.com", "maps.google.com", "yelp.com",
+          "ds-destinationsolutions.com", "holidays.hrs.de", "tiscover.com", "im-web.de",
           "meinestadt.de", "11880.com", "dasoertliche.de", "gelbeseiten.de",
           "golocal.de", "werkenntdenbesten.de", "facebook.com", "instagram.com",
           "pinterest.com", "youtube.com", "tiktok.com"
