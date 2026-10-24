@@ -222,12 +222,22 @@ function inferredFields(p){
  }
  return out;
 }
+function normalizeResearchWebsite(value){
+ try{
+  const u=new URL(String(value||'').trim());
+  if(!['http:','https:'].includes(u.protocol))return String(value||'').trim();
+  // Nur automatische Recherchevorschläge auf die Hauptadresse kürzen.
+  // Manuelle Änderungen und normales Speichern bleiben unverändert.
+  return u.origin+'/';
+ }catch{return String(value||'').trim()}
+}
 function prefill(card){
  const p=JSON.parse(card.dataset.payload||'{}');
  // Temporärer Recherchepuffer: zuerst gespeicherte Feldwerte, dann Angaben aus den offiziellen Quellseiten.
  const buffer={name:p.name||'',town:p.town||'',address:p.address||'',contact_email:p.contact_email||'',contact_phone:p.contact_phone||'',website_url:p.website_url||''};
  const guessed=inferredFields(p);
  for(const [key,value] of Object.entries(guessed)){if(!String(buffer[key]||'').trim()&&String(value||'').trim())buffer[key]=String(value).trim()}
+ buffer.website_url=normalizeResearchWebsite(buffer.website_url);
  // Verifizierte offizielle Angaben als Rückfall für genau diesen bereits recherchierten Testfall.
  if(/pfatischer/i.test(String(p.name||card.querySelector('h2')?.textContent||''))){
   const official={name:'Ferienwohnungen Pfatischer',town:'Rottach-Egern',address:'Ludwig-Thoma-Straße 65, 83700 Rottach-Egern',contact_email:'pfatischer@t-online.de',contact_phone:'+49 8022 2713040',website_url:'https://gaestehaus-pfatischer.de/'};
