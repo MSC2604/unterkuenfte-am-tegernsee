@@ -68,8 +68,9 @@ button.danger{background:#8a3434}
 #drafts .draft .grid>div:has(>select[data-key="type"]),
 #drafts .draft .grid>div:has(>[data-key="booking_url"]),
 #drafts .draft .grid>div:has(>[data-key="description"]) {display:none!important}
-#drafts .draft .approve,
-#drafts .draft .reject {display:none!important}
+#drafts .draft .approve {display:none!important}
+/* Ablehnen bleibt in der Rechercheprüfung verfügbar. */
+#drafts .draft .reject {display:inline-block!important}
 #drafts .draft .save {font-size:0}
 #drafts .draft .save::after {content:"Entwurf speichern";font-size:16px}
 #drafts .draft .source-toggle {margin-bottom:8px}
