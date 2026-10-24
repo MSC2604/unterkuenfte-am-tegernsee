@@ -217,7 +217,7 @@ function inferredFields(p){
    else if(street)out.address=street;
  }
  if(!p.website_url){
-   const candidate=valid.find(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!/impressum|imprint|legal[-_ ]?notice/i.test(x.url+' '+String(x.title||'')));
+   const candidate=valid.find(x=>x.url&&/^https?:\/\//i.test(x.url)&&!/impressum|imprint|legal[-_ ]?notice/i.test(x.url+' '+String(x.title||'')));
    if(candidate)out.website_url=candidate.url;
  }
  return out;
