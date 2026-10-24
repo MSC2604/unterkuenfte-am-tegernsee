@@ -283,7 +283,14 @@ export default {
         // but do not pad a property-specific draft with unrelated nearby accommodation listings.
         const directMatches = scored.filter(x => x.titleMatchCount > 0 || x.officialTegernsee && x.matchCount > 0);
         const relevant = scored.filter(x => !x.unrelated && (!x.weakIdentity || x.officialTegernsee || x.matchCount >= Math.min(2, terms.length)));
-        const results = (directMatches.length ? relevant : scored.filter(x => !x.unrelated)).slice(0, 8);
+        const candidateResults = directMatches.length ? relevant : scored.filter(x => !x.unrelated);
+        candidateResults.sort((a, b) =>
+          Number(b.titleMatchCount > 0) - Number(a.titleMatchCount > 0) ||
+          Number(b.officialTegernsee) - Number(a.officialTegernsee) ||
+          b.matchCount - a.matchCount ||
+          Number(b.likelyHostSite) - Number(a.likelyHostSite)
+        );
+        const results = candidateResults.slice(0, 8);
         const sources = results.map(x => x.item.url).slice(0, 6);
         // Search snippets often contain only a title. Try to extract the selected source pages
         // so the draft can use actual page text; if extraction fails, retain the search snippets.
