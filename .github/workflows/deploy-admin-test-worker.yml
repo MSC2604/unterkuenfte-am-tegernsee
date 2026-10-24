@@ -2,7 +2,7 @@ name: Test-Worker für Admin-Sitzung bereitstellen
 
 on:
   push:
-    branches: ["anmeldung-60min-test"]
+    branches: ["anmeldung-60min-test", "fix/unterkunft-recherche-details"]
     paths:
       - "worker/**"
       - ".github/workflows/deploy-admin-test-worker.yml"
