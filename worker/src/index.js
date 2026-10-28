@@ -72,6 +72,12 @@ async function ensureShowPriceAbColumn(env) {
     await env.DB.prepare("ALTER TABLE price_offers ADD COLUMN show_price_ab INTEGER NOT NULL DEFAULT 1").run();
   }
 }
+async function ensurePriceDisplayOrderColumn(env) {
+  const { results } = await env.DB.prepare("PRAGMA table_info(price_offers)").all();
+  if (!results.some(column => column.name === "display_order")) {
+    await env.DB.prepare("ALTER TABLE price_offers ADD COLUMN display_order INTEGER").run();
+  }
+}
 async function ensureAccommodationCalendarColumn(env) {
   const { results } = await env.DB.prepare("PRAGMA table_info(accommodations)").all();
   if (!results.some(column => column.name === "booking_calendar_url")) {
@@ -147,6 +153,7 @@ export default {
 
     if (request.method === "GET" && path === "/api/accommodations") {
       await ensureBookingCalendarUrlColumn(env);
+      await ensurePriceDisplayOrderColumn(env);
       try {
         // Optional filters for the public accommodation search. Values are bound, never interpolated into SQL.
         const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
@@ -176,11 +183,12 @@ export default {
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
         await ensureShowPriceAbColumn(env);
+        await ensurePriceDisplayOrderColumn(env);
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.occupancy, p.valid_from, p.valid_to,
                   p.arrival_date, p.departure_date, p.extra_cleaning_amount,
-                  p.tourist_tax_note, p.additional_costs_note, p.price_display_note, p.unit_description, p.show_price_ab, p.price_on_request,
+                  p.tourist_tax_note, p.additional_costs_note, p.price_display_note, p.unit_description, p.show_price_ab, p.price_on_request, p.display_order,
                   p.source_url, p.source_name, p.researched_at
              FROM price_offers p
              JOIN accommodations a ON a.id = p.accommodation_id
@@ -321,6 +329,7 @@ export default {
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         await ensureBookingCalendarUrlColumn(env);
+        await ensurePriceDisplayOrderColumn(env);
         await ensureGalleryTable(env);
         await ensureOccupancyColumn(env);
         await ensurePriceDisplayNoteColumn(env);
@@ -331,7 +340,7 @@ export default {
           "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
         ).all();
         const { results: offers } = await env.DB.prepare(
-          "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url FROM price_offers ORDER BY researched_at DESC"
+          "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, display_order, source_url, source_name, booking_calendar_url FROM price_offers ORDER BY researched_at DESC"
         ).all();
         const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
         const galleryByOffer = new Map();
@@ -346,6 +355,7 @@ export default {
       }
       if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/update$/.test(path)) {
         await ensureBookingCalendarUrlColumn(env);
+        await ensurePriceDisplayOrderColumn(env);
         await ensureGalleryTable(env);
         const accommodationId = path.split("/")[4];
         let body;
@@ -407,22 +417,23 @@ export default {
             price.price_on_request ? 1 : 0,
             sourceUrl.slice(0, 2000),
             (typeof price.source_name === "string" && price.source_name.trim() ? price.source_name.trim() : oldOffer?.source_name || (sourceUrl ? "Website der Unterkunft" : "Manuelle Eingabe")).slice(0, 300),
-            typeof price.booking_calendar_url === "string" && /^https?:\/\//i.test(price.booking_calendar_url.trim()) ? price.booking_calendar_url.trim().slice(0, 2000) : null
+            typeof price.booking_calendar_url === "string" && /^https?:\/\//i.test(price.booking_calendar_url.trim()) ? price.booking_calendar_url.trim().slice(0, 2000) : null,
+            Number.isInteger(price.display_order) && price.display_order >= 0 ? price.display_order : null
           ];
           let targetOfferId;
           if (oldOffer) {
             targetOfferId = oldOffer.id;
             retainedIds.add(oldOffer.id);
             batch.push(env.DB.prepare(
-              "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, occupancy = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_display_note = ?, unit_description = ?, show_price_ab = ?, price_on_request = ?, source_url = ?, source_name = ?, booking_calendar_url = ? WHERE id = ? AND accommodation_id = ?"
+              "UPDATE price_offers SET price_amount = ?, currency = 'EUR', price_unit = ?, min_nights = ?, season_label = ?, occupancy = ?, valid_from = ?, valid_to = ?, arrival_date = ?, departure_date = ?, extra_cleaning_amount = ?, tourist_tax_note = ?, additional_costs_note = ?, price_display_note = ?, unit_description = ?, show_price_ab = ?, price_on_request = ?, source_url = ?, source_name = ?, booking_calendar_url = ?, display_order = ? WHERE id = ? AND accommodation_id = ?"
             ).bind(...values, oldOffer.id, accommodationId));
           } else {
             const newId = id();
             targetOfferId = newId;
             batch.push(env.DB.prepare(
               `INSERT INTO price_offers
-               (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url)
-               VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+               (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url, display_order)
+               VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(newId, accommodationId, ...values));
             retainedIds.add(newId);
           }
@@ -499,6 +510,7 @@ export default {
       }
       if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/approve$/.test(path)) {
         await ensureBookingCalendarUrlColumn(env);
+        await ensurePriceDisplayOrderColumn(env);
         await ensureOccupancyColumn(env);
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
@@ -534,8 +546,8 @@ export default {
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
           batch.push(env.DB.prepare(
             `INSERT INTO price_offers
-             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url)
-             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             (id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url, display_order)
+             VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(id(), accommodationId, amount,
             typeof price.price_unit === "string" ? price.price_unit.slice(0, 100) : null,
             Number.isInteger(price.min_nights) ? price.min_nights : null,
@@ -553,7 +565,8 @@ export default {
             price.show_price_ab === false || price.show_price_ab === 0 ? 0 : 1,
             price.price_on_request ? 1 : 0, sourceUrl.slice(0, 2000),
             typeof price.source_name === "string" ? price.source_name.slice(0, 300) : null,
-            typeof price.booking_calendar_url === "string" && /^https?:\/\//i.test(price.booking_calendar_url.trim()) ? price.booking_calendar_url.trim().slice(0, 2000) : null));
+            typeof price.booking_calendar_url === "string" && /^https?:\/\//i.test(price.booking_calendar_url.trim()) ? price.booking_calendar_url.trim().slice(0, 2000) : null,
+            Number.isInteger(price.display_order) && price.display_order >= 0 ? price.display_order : null));
         }
         batch.push(env.DB.prepare(
           "UPDATE research_drafts SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'"
