@@ -513,7 +513,7 @@ function buildReservationDialog(){
   const selectedPhrase=kind==='apartment'?'die gewünschte Ferienwohnung':kind==='room'?'das gewünschte Zimmer':'die gewünschte Einheit';
   let personalLandlordName='';
   try{const savedLandlordNames=JSON.parse(localStorage.getItem('unterkuenfte_landlord_names_v1')||'{}');personalLandlordName=String(savedLandlordNames[String(a.id)]||'').trim()}catch{}
-  const greeting=personalLandlordName?'Guten Tag '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
+  const greeting=personalLandlordName?'Sehr geehrte Familie '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
   const opening=selected
    ? 'hiermit möchte ich mich erkundigen, ob '+selectedPhrase+' „'+selectedText+'“ im nachfolgend genannten Zeitraum verfügbar ist.'
    : 'hiermit möchte ich mich nach einer passenden Unterkunft bei Ihnen für den nachfolgend genannten Zeitraum erkundigen.';
