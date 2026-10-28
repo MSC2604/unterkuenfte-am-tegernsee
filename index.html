@@ -515,12 +515,12 @@ function buildReservationDialog(){
   try{const savedLandlordNames=JSON.parse(localStorage.getItem('unterkuenfte_landlord_names_v1')||'{}');personalLandlordName=String(savedLandlordNames[String(a.id)]||'').trim()}catch{}
   const greeting=personalLandlordName?'Sehr geehrte Familie '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
   const opening=selected
-   ? 'hiermit möchte ich mich erkundigen, ob '+selectedPhrase+' „'+selectedText+'“ im nachfolgend genannten Zeitraum verfügbar ist.'
-   : 'hiermit möchte ich mich nach einer passenden Unterkunft bei Ihnen für den nachfolgend genannten Zeitraum erkundigen.';
+   ? 'ich möchte unverbindlich anfragen, ob '+selectedPhrase+' „'+selectedText+'“ im nachfolgend genannten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
+   : 'ich möchte unverbindlich anfragen, ob Ihre Unterkunft im nachfolgend genannten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.';
   let body=[greeting,'',opening,'', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
   if(phone)body.push('Telefon: '+phone);
   if(message)body.push('','WEITERE ANGABEN',''+message);
-  body.push('','Bitte teilen Sie mir mit, ob Sie im genannten Zeitraum eine passende Unterkunft anbieten können und welcher Gesamtpreis für den Aufenthalt anfällt. Für geeignete Alternativangebote bin ich ebenfalls offen.','','Vielen Dank für Ihre Rückmeldung.','','Mit freundlichen Grüßen',''+firstName+' '+lastName);
+  body.push('','Über eine kurze Rückmeldung zur Verfügbarkeit und zum Gesamtpreis würde ich mich sehr freuen.','','Vielen Dank im Voraus.','','Mit freundlichen Grüßen',''+firstName+' '+lastName);
   const subject=(selected?'Anfrage: '+selectedText:'Verfügbarkeitsanfrage')+' | '+a.name;
   const mailto='mailto:'+encodeURIComponent(a.contact_email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body.join('\n'));
   window.location.href=mailto;
