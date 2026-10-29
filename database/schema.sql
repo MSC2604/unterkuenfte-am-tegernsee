@@ -58,3 +58,12 @@ CREATE INDEX IF NOT EXISTS idx_price_offers_accommodation
   ON price_offers(accommodation_id, researched_at);
 CREATE INDEX IF NOT EXISTS idx_research_drafts_status
   ON research_drafts(status, researched_at);
+
+
+-- Mehrere saisonale Nachtpreise je Wohnung, ohne die Wohnung doppelt anzulegen.
+CREATE TABLE IF NOT EXISTS price_offer_periods (
+ id TEXT PRIMARY KEY, price_offer_id TEXT NOT NULL, valid_from TEXT NOT NULL,
+ valid_to TEXT NOT NULL, price_amount REAL NOT NULL, min_nights INTEGER,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (price_offer_id) REFERENCES price_offers(id) ON DELETE CASCADE
+);
