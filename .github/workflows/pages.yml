@@ -72,13 +72,13 @@ jobs:
                 const unitCount = await card.locator('.result-unit').count();
                 const advertisedCount = await card.locator('.result-unit-count').innerText().catch(() => '');
                 if (advertisedCount) {
-                  const expected = Number(advertisedCount.match(/\\d+/)?.[0]);
+                  const expected = Number(advertisedCount.match(/\d+/)?.[0]);
                   if (Number.isFinite(expected) && expected !== unitCount) {
                     throw new Error('Unit count mismatch for ' + await card.locator('h3').innerText() + ': label=' + expected + ', details=' + unitCount);
                   }
                 }
                 const tilePrice = (await card.locator('.result-card-body > .result-price').innerText().catch(() => '')).trim();
-                if (tilePrice && !tilePrice.includes('Preis auf Anfrage') && !/^ab\\s/i.test(tilePrice)) {
+                if (tilePrice && !tilePrice.includes('Preis auf Anfrage') && !/^ab\s/i.test(tilePrice)) {
                   throw new Error('Tile price does not start with "ab": ' + await card.locator('h3').innerText() + ' (' + tilePrice + ')');
                 }
                 console.log('Card:', (await card.locator('h3').innerText()), '| visible unit offers:', unitCount, '| card label:', advertisedCount || 'none', '| tile price:', tilePrice || 'none');
