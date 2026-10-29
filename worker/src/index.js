@@ -121,9 +121,20 @@ function safeGalleryImages(value) {
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: JSON_HEADERS });
-    await ensureAccommodationCalendarColumn(env);
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    // Keep the health check independent of schema migrations so it can distinguish
+    // database connectivity from a failing application query.
+    if (request.method === "GET" && path === "/api/health") {
+      try {
+        await env.DB.prepare("SELECT 1").first();
+        return json({ ok: true, service: "unterkuenfte-am-tegernsee-api", database: true });
+      } catch (error) {
+        console.error("Health check database failure:", error);
+        return json({ ok: false, database: false, error: "Datenbank nicht erreichbar oder nicht eingerichtet." }, 503);
+      }
+    }
 
     if (request.method === "POST" && path === "/api/admin/session-login") {
       let body;
@@ -157,21 +168,13 @@ export default {
       return json({ ok: true });
     }
 
-    if (request.method === "GET" && path === "/api/health") {
-      try {
-        await env.DB.prepare("SELECT 1").first();
-        return json({ ok: true, service: "unterkuenfte-am-tegernsee-api", database: true });
-      } catch {
-        return json({ ok: false, database: false, error: "Datenbank nicht erreichbar oder nicht eingerichtet." }, 503);
-      }
-    }
-
     if (request.method === "GET" && path === "/api/accommodations") {
-      await ensureTilePriceAbColumn(env);
-      await ensureBookingCalendarUrlColumn(env);
-      await ensurePriceDisplayOrderColumn(env);
-        await ensureFuturePriceColumns(env);
       try {
+        await ensureAccommodationCalendarColumn(env);
+        await ensureTilePriceAbColumn(env);
+        await ensureBookingCalendarUrlColumn(env);
+        await ensurePriceDisplayOrderColumn(env);
+        await ensureFuturePriceColumns(env);
         // Optional filters for the public accommodation search. Values are bound, never interpolated into SQL.
         const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
         const town = (url.searchParams.get("town") || "").trim().slice(0, 100);
@@ -238,8 +241,9 @@ export default {
           byAccommodation.get(offer.accommodation_id).push(offer);
         }
         return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
-      } catch {
-        return json({ error: "Unterkünfte konnten nicht geladen werden. Datenbank-Schema prüfen." }, 503);
+      } catch (error) {
+        console.error("Public accommodation query failed:", error);
+        return json({ error: "Unterkünfte konnten nicht geladen werden. Datenbank-Schema oder Verbindung prüfen." }, 503);
       }
     }
 
