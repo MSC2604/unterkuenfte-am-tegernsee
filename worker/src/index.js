@@ -167,6 +167,7 @@ export default {
     }
 
     if (request.method === "GET" && path === "/api/accommodations") {
+      await ensureTilePriceAbColumn(env);
       await ensureBookingCalendarUrlColumn(env);
       await ensurePriceDisplayOrderColumn(env);
         await ensureFuturePriceColumns(env);
@@ -183,7 +184,7 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
                   a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url,
-                  a.updated_at, ai.image_data AS image_url
+                  a.updated_at, a.show_tile_price_ab, ai.image_data AS image_url
              FROM accommodations a
              LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id
             WHERE a.published = 1
