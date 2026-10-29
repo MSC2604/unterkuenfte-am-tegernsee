@@ -115,6 +115,7 @@ async function load(){
   try {
    const settingsResponse=await api('/api/admin/site-settings');
    const settings=settingsResponse.settings||{};
+   siteImage=settings.image||'';
    $('siteTitle').value=settings.title||'Ein schöner Platz. Ganz nah am See.';
    $('siteSubtitle').value=settings.subtitle||'Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.';
    if(settings.image){$('siteImagePreview').src=settings.image;$('siteImagePreview').hidden=false}else{$('siteImagePreview').removeAttribute('src');$('siteImagePreview').hidden=true}
