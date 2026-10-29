@@ -15,6 +15,18 @@ async function tokenDigest(token) {
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
 }
+async function removeRetiredFeatureData(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS app_migrations (migration_key TEXT PRIMARY KEY, applied_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  const applied = await env.DB.prepare("SELECT migration_key FROM app_migrations WHERE migration_key = ?").bind("remove-analytics-feedback-usage-v1").first();
+  if (applied) return;
+  await env.DB.batch([
+    env.DB.prepare("DROP TABLE IF EXISTS app_analytics"),
+    env.DB.prepare("DROP TABLE IF EXISTS visitor_feedback"),
+    env.DB.prepare("DROP TABLE IF EXISTS research_usage"),
+    env.DB.prepare("DROP TABLE IF EXISTS tavily_usage_cache"),
+    env.DB.prepare("INSERT INTO app_migrations (migration_key) VALUES (?)").bind("remove-analytics-feedback-usage-v1")
+  ]);
+}
 async function ensureAdminSessionsTable(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_sessions (
     token_hash TEXT PRIMARY KEY,
@@ -57,14 +69,6 @@ async function readSiteSettings(env) {
     subtitle: typeof settings.subtitle === "string" ? settings.subtitle : "Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.",
     image: typeof settings.image === "string" ? settings.image : ""
   };
-}
-async function incrementResearchUsage(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS research_usage (usage_key TEXT PRIMARY KEY, request_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
-  await env.DB.prepare("INSERT INTO research_usage (usage_key, request_count) VALUES ('research', 1) ON CONFLICT(usage_key) DO UPDATE SET request_count = request_count + 1, updated_at = CURRENT_TIMESTAMP").run();
-}
-async function ensureCommunityTables(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS app_analytics (event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, accommodation_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS visitor_feedback (feedback_id TEXT PRIMARY KEY, feedback_type TEXT NOT NULL, message TEXT NOT NULL, page_url TEXT, status TEXT NOT NULL DEFAULT 'new', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
 }
 function safeAccommodationImage(value) {
   return typeof value === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(value) && value.length <= 260000 ? value : "";
@@ -148,6 +152,8 @@ function safeGalleryImages(value) {
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: JSON_HEADERS });
+    try { await removeRetiredFeatureData(env); }
+    catch (error) { console.error("Retired feature data cleanup failed:", error); return json({ error: "Datenbankbereinigung konnte nicht abgeschlossen werden." }, 503); }
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
 
@@ -193,31 +199,6 @@ export default {
         }
       }
       return json({ ok: true });
-    }
-
-    if (request.method === "POST" && path === "/api/analytics/view") {
-      try {
-        const body = await request.json();
-        const eventType = body?.event_type === "accommodation" ? "accommodation" : "page";
-        const accommodationId = typeof body?.accommodation_id === "string" ? body.accommodation_id.slice(0, 80) : null;
-        await ensureCommunityTables(env);
-        await env.DB.prepare("INSERT INTO app_analytics (event_id, event_type, accommodation_id) VALUES (?, ?, ?)").bind(id(), eventType, accommodationId).run();
-        return json({ success: true });
-      } catch (error) { console.error("Analytics write failed:", error); return json({ error: "Besuch konnte nicht gezählt werden." }, 500); }
-    }
-    if (request.method === "POST" && path === "/api/feedback") {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
-      const allowedTypes = ["suggestion", "correction", "question"];
-      const feedbackType = allowedTypes.includes(body?.feedback_type) ? body.feedback_type : "";
-      const message = typeof body?.message === "string" ? body.message.trim().slice(0, 3000) : "";
-      if (!feedbackType || message.length < 5) return json({ error: "Bitte wähle eine Kategorie und gib eine Nachricht mit mindestens 5 Zeichen ein." }, 400);
-      const pageUrl = typeof body?.page_url === "string" ? body.page_url.slice(0, 1000) : "";
-      try {
-        await ensureCommunityTables(env);
-        await env.DB.prepare("INSERT INTO visitor_feedback (feedback_id, feedback_type, message, page_url) VALUES (?, ?, ?, ?)").bind(id(), feedbackType, message, pageUrl).run();
-        return json({ success: true });
-      } catch (error) { console.error("Feedback save failed:", error); return json({ error: "Die Meldung konnte nicht gespeichert werden." }, 500); }
     }
 
     if (request.method === "GET" && path === "/api/site-settings") {
@@ -307,52 +288,8 @@ export default {
       }
     }
 
-    if (request.method === "GET" && path === "/api/research-usage") {
-      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tavily_usage_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
-      try {
-        if (!env.TAVILY_API_KEY) throw new Error("TAVILY_API_KEY ist im Unterkunfts-Worker nicht eingerichtet.");
-        const response = await fetch("https://api.tavily.com/usage", { method: "GET", headers: { Authorization: `Bearer ${env.TAVILY_API_KEY}` }, cache: "no-store" });
-        let data = {};
-        try { data = await response.json(); } catch {}
-        if (!response.ok) throw new Error(`Tavily Usage HTTP-Fehler (${response.status}).`);
-        const key = data.key || {};
-        const account = data.account || {};
-        const usedRaw = account.plan_usage ?? key.usage;
-        const limitRaw = account.plan_limit ?? key.limit;
-        const used = usedRaw != null && Number.isFinite(Number(usedRaw)) ? Number(usedRaw) : null;
-        const limit = limitRaw != null && Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : null;
-        if (used === null || limit === null || limit <= 0) throw new Error("Tavily hat keine auswertbaren Verbrauchswerte geliefert.");
-        const payload = { available: true, used, limit, remaining: Math.max(0, limit - used), percent: Math.max(0, Math.min(100, Math.round(used / limit * 100))) };
-        await env.DB.prepare("INSERT INTO tavily_usage_cache (cache_key, payload, updated_at) VALUES ('account', ?, CURRENT_TIMESTAMP) ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP").bind(JSON.stringify(payload)).run();
-        return json({ ...payload, cached: false, updated_at: new Date().toISOString() });
-      } catch (error) {
-        const cached = await env.DB.prepare("SELECT payload, updated_at FROM tavily_usage_cache WHERE cache_key = 'account'").first();
-        if (cached) return json({ ...JSON.parse(cached.payload), cached: true, updated_at: cached.updated_at, note: "Tavily ist momentan nicht erreichbar. Angezeigt werden die zuletzt erfolgreich abgerufenen Werte." });
-        return json({ available: false, error: error instanceof Error ? error.message : "Tavily-Kontingent konnte nicht abgerufen werden." }, 502);
-      }
-    }
-
     if (path.startsWith("/api/admin/")) {
       if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
-      if (request.method === "GET" && path === "/api/admin/analytics") {
-        await ensureCommunityTables(env);
-        const totals = await env.DB.prepare("SELECT event_type, COUNT(*) AS total FROM app_analytics GROUP BY event_type").all();
-        const accommodationViews = await env.DB.prepare("SELECT accommodation_id, COUNT(*) AS total FROM app_analytics WHERE event_type = 'accommodation' AND accommodation_id IS NOT NULL GROUP BY accommodation_id ORDER BY total DESC LIMIT 30").all();
-        return json({ totals: Object.fromEntries((totals.results || []).map(row => [row.event_type, Number(row.total || 0)])), accommodation_views: accommodationViews.results || [] });
-      }
-      if (request.method === "GET" && path === "/api/admin/feedback") {
-        await ensureCommunityTables(env);
-        const { results } = await env.DB.prepare("SELECT feedback_id, feedback_type, message, page_url, status, created_at FROM visitor_feedback ORDER BY created_at DESC LIMIT 100").all();
-        return json({ feedback: results || [] });
-      }
-      if (request.method === "POST" && path === "/api/admin/feedback/status") {
-        let body;
-        try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
-        if (typeof body?.feedback_id !== "string" || !["new", "reviewed"].includes(body?.status)) return json({ error: "Ungültiger Status." }, 400);
-        await ensureCommunityTables(env);
-        await env.DB.prepare("UPDATE visitor_feedback SET status = ? WHERE feedback_id = ?").bind(body.status, body.feedback_id).run();
-        return json({ success: true });
-      }
       if (request.method === "GET" && path === "/api/admin/site-settings") {
         try { return json({ settings: await readSiteSettings(env) }); }
         catch { return json({ error: "Seiteneinstellungen konnten nicht geladen werden." }, 503); }
@@ -385,7 +322,6 @@ export default {
           return json({ error: "Bitte einen Unterkunftsnamen oder eine Website als query angeben." }, 400);
         }
         const query = body.query.trim().slice(0, 300);
-        try { await incrementResearchUsage(env); } catch (error) { console.error("Research usage tracking failed:", error); }
         let searchResponse;
         try {
           searchResponse = await fetch("https://api.tavily.com/search", {
