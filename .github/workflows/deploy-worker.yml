@@ -49,5 +49,9 @@ jobs:
             console.error(JSON.stringify({ error: data.error, diagnostic: data.diagnostic }));
             process.exit(1);
           }
-          console.log('Accommodation API smoke test passed; published entries:', data.accommodations.length);
+          if (!data.accommodations.every(item => Object.prototype.hasOwnProperty.call(item, 'landlord_name'))) {
+            console.error('Accommodation API is missing the persistent landlord_name field.');
+            process.exit(1);
+          }
+          console.log('Accommodation API smoke test passed; published entries:', data.accommodations.length, '| landlord_name field present on all entries.');
           NODE
