@@ -96,6 +96,15 @@ footer strong{color:var(--navy)}
 .main-menu[hidden]{display:none}
 .main-menu a{display:block;padding:11px 13px;border-radius:9px;text-decoration:none;color:#244a79;font-weight:700;font-size:14px}
 .main-menu a:hover,.main-menu a:focus-visible{background:#e8eff8;outline:none}
+.main-menu .menu-divider{height:1px;background:#e8edf3;margin:5px 7px}
+.main-menu button{display:block;width:100%;text-align:left;padding:11px 13px;border:0;border-radius:9px;background:transparent;color:#244a79;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
+.main-menu button:hover,.main-menu button:focus-visible{background:#e8eff8;outline:none}
+.favorite-toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid #d6dfeb;border-radius:999px;background:#fff;color:#244a79;padding:7px 10px;font:inherit;font-size:12px;font-weight:750;cursor:pointer;margin-top:10px}
+.favorite-toggle.active{background:#fcecee;border-color:#e8b7c0;color:#9b2f46}
+.favorite-empty-note{display:none;background:#fff;border:1px solid #e0e6ee;border-radius:14px;padding:15px;color:#526174;margin-bottom:12px}
+.map-panel{display:none;margin-top:18px;background:#fff;border:1px solid #e0e6ee;border-radius:18px;padding:16px}
+.map-panel.open{display:block}
+.map-panel a{color:#244a79;font-weight:700}
 
 /* Neues, vereinfachtes Bayern-Blau-Layout – Daten/API bleiben unverändert */
 :root{--navy:#244a79;--blue:#244a79;--teal:#e8eff8;--sand:#f4f2ec;--ink:#203149;--muted:#6d7887;--line:#e0e6ee;--white:#fff;--shadow:0 8px 24px rgba(36,74,121,.09)}
@@ -281,14 +290,22 @@ input,select{outline-color:#5277a6}
 <span></span><span></span><span></span>
 </button>
 <div id="mainMenu" class="main-menu" hidden>
-<a href="#listingPreview">Unterkünfte</a>
+<a href="./">Startseite</a>
+<a href="#searchPanel" data-menu-action="search">Unterkünfte suchen</a>
+<button type="button" data-menu-action="map">Unterkünfte auf der Karte</button>
+<button type="button" data-menu-action="favorites">Meine Favoriten</button>
+<button type="button" data-menu-action="share">App weiterempfehlen</button>
+<div class="menu-divider"></div>
+<a href="admin.html#research-usage">Suchkontingent anzeigen</a>
+<a href="admin.html#site-settings">Titelbild ändern</a>
+<a href="admin.html#site-settings">Titelbild-Text ändern</a>
 <a href="admin.html">Verwaltung</a>
 </div>
 </div>
 <div>
 <div class="eyebrow">Ankommen · Durchatmen · Wohlfühlen</div>
-<h1>Ein schöner Platz.<br>Ganz nah am See.</h1>
-<p>Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.</p>
+<h1 id="heroTitle">Ein schöner Platz.<br>Ganz nah am See.</h1>
+<p id="heroSubtitle">Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.</p>
 </div>
 <svg class="hero-art" viewBox="0 0 480 310" role="img" aria-label="Illustration der Berge und des Tegernsees">
 <circle cx="340" cy="70" r="34" fill="#f1dca8"/>
@@ -305,7 +322,7 @@ input,select{outline-color:#5277a6}
 </div>
 </header>
 <main>
-<section class="search-panel" aria-label="Unterkünfte suchen">
+<section class="search-panel" id="searchPanel" aria-label="Unterkünfte suchen">
 <h2 class="search-title">Finde deinen Lieblingsplatz</h2>
 <div class="searchrow">
 <input id="search" type="search" placeholder="Unterkunft oder Ort eingeben …" aria-label="Unterkunft oder Ort suchen" autocomplete="off">
@@ -340,6 +357,8 @@ input,select{outline-color:#5277a6}
 </section>
 <section id="listingPreview" class="listing-preview" aria-labelledby="previewTitle">
 <div class="section-head"><div><h2 id="previewTitle">Unterkünfte entdecken</h2><p>Freigegebene Unterkünfte mit transparenten Preisangaben und direktem Kontakt.</p></div></div>
+<p id="favoritesEmpty" class="favorite-empty-note">Du hast noch keine Favoriten gespeichert. Tippe auf das Herz einer Unterkunft, um sie hier zu sammeln.</p>
+<div id="mapPanel" class="map-panel"><h3>Unterkünfte auf der Karte</h3><p>Wähle eine Unterkunft, um ihren Standort auf OpenStreetMap zu öffnen. Bei fehlender Adresse wird der Ort verwendet.</p><div id="mapLinks"></div></div>
 <div id="resultsGrid" class="results-grid" aria-live="polite"><p class="price-disclaimer">Freigegebene Unterkünfte werden geladen …</p></div>
 </section>
 <section aria-labelledby="browseTitle">
@@ -376,6 +395,15 @@ input,select{outline-color:#5277a6}
 <script>
 const menuToggle=document.querySelector('#menuToggle');
 const mainMenu=document.querySelector('#mainMenu');
+const FAVORITES_KEY='unterkuenfte_favorites_v1';
+let favoritesOnly=false;
+function readFavorites(){try{const v=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]');return Array.isArray(v)?v.map(String):[]}catch{return []}}
+function writeFavorites(ids){try{localStorage.setItem(FAVORITES_KEY,JSON.stringify(ids))}catch{}}
+function applyFavoriteButtons(){document.querySelectorAll('.result-card').forEach(card=>{const id=card.dataset.accommodationId;const button=card.querySelector('.favorite-toggle');if(!button)return;const active=readFavorites().includes(id);button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));button.textContent=active?'♥ Gespeichert':'♡ Merken';});}
+function applyFavoritesFilter(){const grid=document.querySelector('#resultsGrid');let visible=0;grid.querySelectorAll('.result-card').forEach(card=>{const show=!favoritesOnly||readFavorites().includes(card.dataset.accommodationId);card.hidden=!show;if(show)visible++});$('favoritesEmpty').style.display=favoritesOnly&&visible===0?'block':'none';}
+async function loadSiteSettings(){try{const response=await fetch(API_BASE+'/api/site-settings',{headers:{'Accept':'application/json'}});if(!response.ok)return;const data=await response.json();const settings=data.settings||{};if(settings.title)document.querySelector('#heroTitle').textContent=settings.title;if(settings.subtitle)document.querySelector('#heroSubtitle').textContent=settings.subtitle;if(settings.image){document.querySelector('.hero').style.backgroundImage='linear-gradient(145deg,rgba(25,59,104,.82),rgba(36,74,121,.75)),url("'+settings.image.replace(/"/g,'')+'")';document.querySelector('.hero').style.backgroundSize='cover';document.querySelector('.hero').style.backgroundPosition='center';}}catch{}}
+const $=id=>document.getElementById(id);
+mainMenu.addEventListener('click',event=>{const item=event.target.closest('[data-menu-action]');if(!item)return;const action=item.dataset.menuAction;mainMenu.hidden=true;menuToggle.setAttribute('aria-expanded','false');if(action==='search'){favoritesOnly=false;document.querySelector('#searchPanel').scrollIntoView({behavior:'smooth',block:'start'});document.querySelector('#search').focus({preventScroll:true});}else if(action==='favorites'){favoritesOnly=!favoritesOnly;document.querySelector('#listingPreview').scrollIntoView({behavior:'smooth',block:'start'});applyFavoritesFilter();}else if(action==='map'){document.querySelector('#mapPanel').classList.toggle('open');document.querySelector('#listingPreview').scrollIntoView({behavior:'smooth',block:'start'});renderMapLinks();}else if(action==='share'){const shareData={title:'Unterkünfte am Tegernsee',text:'Entdecke Unterkünfte rund um den Tegernsee.',url:location.href};if(navigator.share)navigator.share(shareData).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(location.href).then(()=>alert('App-Link kopiert.')).catch(()=>prompt('Kopiere den App-Link:',location.href));else prompt('Kopiere den App-Link:',location.href);}});
 menuToggle.addEventListener('click',()=>{
  const opening=mainMenu.hidden;
  mainMenu.hidden=!opening;
@@ -397,6 +425,7 @@ document.addEventListener('keydown',event=>{
   menuToggle.focus();
  }
 });
+function renderMapLinks(){const root=document.querySelector('#mapLinks');const cards=Array.from(document.querySelectorAll('.result-card'));if(!cards.length){root.innerHTML='<p class="muted">Noch keine Unterkünfte geladen.</p>';return}root.innerHTML=cards.map(card=>{const a=loadedAccommodations.get(card.dataset.accommodationId)||{};const query=[a.address,a.town,'Tegernsee'].filter(Boolean).join(', ');return '<p><a href="https://www.openstreetmap.org/search?query='+encodeURIComponent(query)+'" target="_blank" rel="noopener noreferrer">'+esc(a.name||'Unterkunft')+' – '+esc(a.town||a.address||'Standort suchen')+'</a></p>'}).join('');}
 const search=document.querySelector('#search');
 const place=document.querySelector('#place');
 const arrival=document.querySelector('#arrival');
@@ -595,7 +624,7 @@ function accommodationCard(a){
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
  const calendarUrl=String(a.booking_calendar_url||'').trim();
  if(calendarUrl)actions.push('<a class="primary" href="'+esc(calendarUrl)+'" target="_blank" rel="noopener noreferrer">Buchungskalender öffnen</a>');
- const unitCountLabel=unitLabel==='Wohnung'?'Wohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten';const unitCount=sortedPrices.length;const defaultDetailsLabel=reservationLabel(a)+(unitCount?' ('+unitCount+')':'');const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+(lowest!==null?'<small class="price-per-night">pro Nacht</small>':'')+'</div>'+tilePriceNote+priceChangeNotice+(lowestOffer&&Number(lowestOffer.min_nights)>=2&&Number(lowestOffer.min_nights)<=7?'<p class="result-note minimum-stay">Mindestaufenthalt '+esc(String(Number(lowestOffer.min_nights)))+' Nächte</p>':'')+(unitCount?'<p class="result-unit-count">'+unitCount+' '+esc(unitCountLabel)+' hinterlegt</p>':'')+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false" data-default-label="'+esc(defaultDetailsLabel)+'">'+esc(defaultDetailsLabel)+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
+ const unitCountLabel=unitLabel==='Wohnung'?'Wohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten';const unitCount=sortedPrices.length;const defaultDetailsLabel=reservationLabel(a)+(unitCount?' ('+unitCount+')':'');const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+(lowest!==null?'<small class="price-per-night">pro Nacht</small>':'')+'</div>'+tilePriceNote+priceChangeNotice+(lowestOffer&&Number(lowestOffer.min_nights)>=2&&Number(lowestOffer.min_nights)<=7?'<p class="result-note minimum-stay">Mindestaufenthalt '+esc(String(Number(lowestOffer.min_nights)))+' Nächte</p>':'')+(unitCount?'<p class="result-unit-count">'+unitCount+' '+esc(unitCountLabel)+' hinterlegt</p>':'')+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="favorite-toggle" type="button" aria-pressed="false">♡ Merken</button><button class="details-toggle" type="button" aria-expanded="false" data-default-label="'+esc(defaultDetailsLabel)+'">'+esc(defaultDetailsLabel)+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
 }
 const galleryLightbox=document.createElement('div');
 galleryLightbox.className='gallery-lightbox';
@@ -624,6 +653,7 @@ galleryLightbox.querySelector('.gallery-lightbox-next').addEventListener('click'
 galleryLightbox.addEventListener('click',event=>{if(event.target===galleryLightbox)closeLightbox();});
 document.addEventListener('keydown',event=>{if(!galleryLightbox.classList.contains('open'))return;if(event.key==='Escape')closeLightbox();if(event.key==='ArrowLeft')stepLightbox(-1);if(event.key==='ArrowRight')stepLightbox(1);});
 document.querySelector('#resultsGrid').addEventListener('click',event=>{
+ const favoriteButton=event.target.closest('.favorite-toggle');if(favoriteButton){const card=favoriteButton.closest('.result-card');const id=card?.dataset.accommodationId;if(id){const ids=readFavorites();writeFavorites(ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);applyFavoriteButtons();applyFavoritesFilter();renderMapLinks();}return;}
  const clickedImage=event.target.closest('.unit-gallery-images img');
  if(clickedImage){
   const frame=clickedImage.closest('.unit-gallery-images');
@@ -669,6 +699,7 @@ async function loadAccommodations(){
   const items=Array.isArray(data.accommodations)?data.accommodations:[];
   loadedAccommodations.clear();items.forEach(item=>{if(item&&item.id)loadedAccommodations.set(String(item.id),item)});
   grid.dataset.loaded='true';grid.innerHTML=items.length?items.map(accommodationCard).join(''):'<div class="result-empty">Zu dieser Auswahl wurden keine freigegebenen Unterkünfte gefunden. Versuche einen anderen Ort oder eine andere Unterkunftsart.</div>';
+  applyFavoriteButtons();applyFavoritesFilter();renderMapLinks();
   document.querySelector('#statusTitle').textContent=items.length?items.length+' freigegebene Unterkünfte gefunden':'Keine passenden Unterkünfte gefunden';
   document.querySelector('#statusText').textContent='Angezeigt werden ausschließlich freigegebene Unterkünfte. Die angegebenen Preise sind Orientierungswerte; Preis und Verfügbarkeit für deinen Reisezeitraum bitte beim Gastgeber prüfen.';
   document.querySelector('.status-note').innerHTML='<span class="status-dot" aria-hidden="true"></span> '+items.length+' freigegebene Unterkünfte';
@@ -690,6 +721,7 @@ search.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventD
 place.addEventListener('change',()=>{if(document.querySelector('#resultsGrid').dataset.loaded==='true')loadAccommodations()});
 
 // Beim Öffnen der Hauptseite alle freigegebenen Unterkünfte automatisch anzeigen – keine Suche nötig.
+loadSiteSettings();
 loadAccommodations();
 
 </script>
