@@ -637,8 +637,7 @@ function buildReservationDialog(){
   saveReservationContact();
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
   const selectedPhrase=kind==='apartment'?'die gewünschte Ferienwohnung':kind==='room'?'das gewünschte Zimmer':'die gewünschte Einheit';
-  let personalLandlordName='';
-  try{const savedLandlordNames=JSON.parse(localStorage.getItem('unterkuenfte_landlord_names_v1')||'{}');personalLandlordName=String(savedLandlordNames[String(a.id)]||'').trim()}catch{}
+  const personalLandlordName=String(a.landlord_name||'').trim()
   const greeting=personalLandlordName?'Sehr geehrte Familie '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
   const opening=selected
    ? 'ich möchte unverbindlich anfragen, ob '+selectedPhrase+' „'+selectedText+'“ im nachfolgend genannten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
