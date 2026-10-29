@@ -27,6 +27,15 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Einstellung für „ab“-Preis auf Unterkunftskacheln absichern
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'data-tile-key="show_tile_price_ab"' admin.html
+          grep -Fq 'show_tile_price_ab:editArea.querySelector' admin.html
+          grep -Fq "const showTileAb=a.show_tile_price_ab" index.html
+          grep -Fq "(showTileAb?'ab ':'')" index.html
+          echo "Preispräfix-Einstellung in Verwaltung und öffentlicher Anzeige vorhanden."
       - name: Website-Dateien bereitstellen
         uses: actions/upload-pages-artifact@v3
         with:
