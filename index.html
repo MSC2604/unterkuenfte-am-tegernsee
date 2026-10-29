@@ -172,7 +172,7 @@ footer strong{color:var(--navy)}
 .result-card h3{margin:0;color:#203149;font-size:20px;line-height:1.25}
 .result-meta{color:#6d7887;font-size:13px;line-height:1.45;margin:6px 0 12px}
 .result-price{display:inline-flex;align-items:center;background:#e8eff8;color:#244a79;border-radius:10px;padding:7px 10px;font-size:16px;font-weight:800}
-.result-summary{font-size:13px;color:#526174;margin:11px 0 0;line-height:1.5}
+.result-unit-count{font-size:12px;font-weight:700;color:#526985;margin:9px 0 0}.result-summary{font-size:13px;color:#526174;margin:11px 0 0;line-height:1.5}
 .result-details{display:none;border-top:1px solid #e7edf4;margin-top:14px;padding-top:12px}
 .result-card.expanded .result-details{display:block}
 .result-details h4{margin:12px 0 6px;color:#244a79;font-size:14px}
@@ -588,7 +588,7 @@ function accommodationCard(a){
  else if(a.booking_url)actions.push('<a class="primary" href="'+esc(a.booking_url)+'" target="_blank" rel="noopener noreferrer">Kontakt / Buchung</a>');
  const calendarUrl=String(a.booking_calendar_url||'').trim();
  if(calendarUrl)actions.push('<a class="primary" href="'+esc(calendarUrl)+'" target="_blank" rel="noopener noreferrer">Buchungskalender öffnen</a>');
- const unitLabel=accommodationUnitLabel(a);const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+(lowest!==null?'<small class="price-per-night">pro Nacht</small>':'')+'</div>'+tilePriceNote+priceChangeNotice+(lowestOffer&&Number(lowestOffer.min_nights)>=2&&Number(lowestOffer.min_nights)<=7?'<p class="result-note minimum-stay">Mindestaufenthalt '+esc(String(Number(lowestOffer.min_nights)))+' Nächte</p>':'')+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false">'+esc(reservationLabel(a))+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
+ const unitLabel=accommodationUnitLabel(a);const unitCountLabel=unitLabel==='Wohnung'?'Wohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten';const unitCount=sortedPrices.length;const defaultDetailsLabel=reservationLabel(a)+(unitCount?' ('+unitCount+')':'');const cardId=String(a.id||'');if(cardId)loadedAccommodations.set(cardId,a);return '<article class="result-card" data-accommodation-id="'+esc(cardId)+'">'+photo+'<div class="result-card-body"><h3>'+esc(a.name)+'</h3><p class="result-meta">'+[a.town,a.type].filter(Boolean).map(esc).join(' · ')+'</p><div class="result-price">'+priceLine+(lowest!==null?'<small class="price-per-night">pro Nacht</small>':'')+'</div>'+tilePriceNote+priceChangeNotice+(lowestOffer&&Number(lowestOffer.min_nights)>=2&&Number(lowestOffer.min_nights)<=7?'<p class="result-note minimum-stay">Mindestaufenthalt '+esc(String(Number(lowestOffer.min_nights)))+' Nächte</p>':'')+(unitCount?'<p class="result-unit-count">'+unitCount+' '+esc(unitCountLabel)+' hinterlegt</p>':'')+(summary?'<p class="result-summary">'+esc(summary)+'</p>':'')+'<button class="details-toggle" type="button" aria-expanded="false" data-default-label="'+esc(defaultDetailsLabel)+'">'+esc(defaultDetailsLabel)+'</button><div class="result-details"><h4>'+esc(unitLabel==='Wohnung'?'Ferienwohnungen':unitLabel==='Zimmer'?'Zimmer':'Einheiten')+'</h4>'+details+'<div class="result-actions">'+actions.join('')+'</div><div class="reservation-entry"><button class="reservation-open" type="button" data-reservation-id="'+esc(cardId)+'">Reservierungsanfrage</button></div></div></div></article>';
 }
 const galleryLightbox=document.createElement('div');
 galleryLightbox.className='gallery-lightbox';
@@ -642,7 +642,7 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
  const card=button.closest('.result-card');
  const expanded=card.classList.toggle('expanded');
  button.setAttribute('aria-expanded',String(expanded));
- button.textContent=expanded?'Details schließen':reservationLabel(loadedAccommodations.get(card.dataset.accommodationId)||{});
+ button.textContent=expanded?'Details schließen':(button.dataset.defaultLabel||reservationLabel(loadedAccommodations.get(card.dataset.accommodationId)||{}));
 });
 
 async function loadAccommodations(){
