@@ -641,13 +641,15 @@ function buildReservationDialog(){
   const firstName=form.querySelector('#reservationFirstName').value.trim(),lastName=form.querySelector('#reservationLastName').value.trim(),email=form.querySelector('#reservationEmail').value.trim(),phone=form.querySelector('#reservationPhone').value.trim(),message=form.querySelector('#reservationMessage').value.trim();
   saveReservationContact();
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
-  const selectedPhrase=kind==='apartment'?'Ihre Ferienwohnung':kind==='room'?'Ihr Zimmer':'Ihre gewünschte Einheit';
+  const selectedPhrase=kind==='room'?'Ihr Zimmer':'Ihre gewünschte Einheit';
   let personalGreetingEnabled=false;
   try{personalGreetingEnabled=localStorage.getItem(PERSONAL_GREETING_DEVICE_KEY)==='1'}catch{}
   const personalLandlordName=personalGreetingEnabled?String(a.landlord_name||'').trim():'';
   const greeting=personalLandlordName?'Sehr geehrte Familie '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
   const opening=selected
-   ? 'ich möchte unverbindlich anfragen, ob '+selectedPhrase+' „'+selectedText+'“ im gewünschten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
+   ? kind==='apartment'
+    ? 'ich möchte unverbindlich anfragen, ob die „'+selectedText+'“ im gewünschten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
+    : 'ich möchte unverbindlich anfragen, ob '+selectedPhrase+' „'+selectedText+'“ im gewünschten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
    : 'ich möchte unverbindlich anfragen, ob Sie im gewünschten Zeitraum eine passende Unterkunft anbieten können und welche Kosten dafür entstehen würden.';
   let body=[greeting,'',opening,'', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
   if(phone)body.push('Telefon: '+phone);
