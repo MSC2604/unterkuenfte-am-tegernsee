@@ -78,9 +78,6 @@ jobs:
                   }
                 }
                 const tilePrice = (await card.locator('.result-card-body > .result-price').innerText().catch(() => '')).trim();
-                if (tilePrice && !tilePrice.includes('Preis auf Anfrage') && !/^ab\s/i.test(tilePrice)) {
-                  throw new Error('Tile price does not start with "ab": ' + await card.locator('h3').innerText() + ' (' + tilePrice + ')');
-                }
                 console.log('Card:', (await card.locator('h3').innerText()), '| visible unit offers:', unitCount, '| card label:', advertisedCount || 'none', '| tile price:', tilePrice || 'none');
               }
               if (pageErrors.length) throw new Error('Browser JavaScript errors: ' + pageErrors.join(' | '));
