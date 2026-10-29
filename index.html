@@ -544,7 +544,7 @@ function buildReservationDialog(){
   close();
  });
 }
-function openReservation(accommodationId,requestedUnitName){
+function openReservation(accommodationId,requestedUnitName,requestedUnitId){
  const a=loadedAccommodations.get(String(accommodationId));
  if(!a)return;
  buildReservationDialog();
@@ -559,7 +559,7 @@ function openReservation(accommodationId,requestedUnitName){
   const name=String(p.season_label||((unitLabel==='Wohnung'?'Wohnung':unitLabel==='Zimmer'?'Zimmer':'Einheit')+' '+(index+1))).replace(/\\s*[·•]\\s*Ab-Preis\\s*$/i,'').trim();
   const option=document.createElement('option');option.value=String(p.id||('unit-'+index));option.textContent=name;select.appendChild(option);
  });
- if(requestedUnitName){const requested=Array.from(select.options).find(option=>option.value&&option.textContent===requestedUnitName);if(requested)select.value=requested.value;}
+ if(requestedUnitId){const requestedById=Array.from(select.options).find(option=>option.value===requestedUnitId);if(requestedById)select.value=requestedById.value;}if(requestedUnitName&&!select.value){const requested=Array.from(select.options).find(option=>option.value&&option.textContent===requestedUnitName);if(requested)select.value=requested.value;}
  form.querySelector('#reservationArrival').value='';
  form.querySelector('#reservationDeparture').value='';
  form.querySelector('#reservationAdults').value='2';
@@ -642,7 +642,7 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
   return;
  }
  const unitReservationButton=event.target.closest('.unit-reservation-open');
- if(unitReservationButton){openReservation(unitReservationButton.dataset.reservationId,unitReservationButton.dataset.unitName);return;}
+ if(unitReservationButton){openReservation(unitReservationButton.dataset.reservationId,unitReservationButton.dataset.unitName,unitReservationButton.dataset.unitId);return;}
  const reservationButton=event.target.closest('.reservation-open');
  if(reservationButton){openReservation(reservationButton.dataset.reservationId);return;}
  const button=event.target.closest('.details-toggle');
