@@ -459,12 +459,16 @@ export default {
             ).bind(newId, accommodationId, ...values));
             retainedIds.add(newId);
           }
-          batch.push(env.DB.prepare("DELETE FROM price_offer_periods WHERE price_offer_id = ?").bind(targetOfferId));
-          for (const period of (Array.isArray(price.price_periods) ? price.price_periods : []).slice(0, 30)) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_from || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_to || "")) || period.valid_to < period.valid_from) continue;
-            const periodAmount = Number(period.price_amount); if (!Number.isFinite(periodAmount) || periodAmount < 0) continue;
-            const periodMin = Number.isInteger(Number(period.min_nights)) && Number(period.min_nights) > 0 ? Number(period.min_nights) : null;
-            batch.push(env.DB.prepare("INSERT INTO price_offer_periods (id, price_offer_id, valid_from, valid_to, price_amount, min_nights) VALUES (?, ?, ?, ?, ?, ?)").bind(id(), targetOfferId, period.valid_from, period.valid_to, periodAmount, periodMin));
+          // Preserve existing seasonal periods unless the user actually edited this section.
+          // This prevents an empty/unloaded form from deleting stored periods on an unrelated save.
+          if (price.price_periods_dirty === true) {
+            batch.push(env.DB.prepare("DELETE FROM price_offer_periods WHERE price_offer_id = ?").bind(targetOfferId));
+            for (const period of (Array.isArray(price.price_periods) ? price.price_periods : []).slice(0, 30)) {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_from || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_to || "")) || period.valid_to < period.valid_from) continue;
+              const periodAmount = Number(period.price_amount); if (!Number.isFinite(periodAmount) || periodAmount < 0) continue;
+              const periodMin = Number.isInteger(Number(period.min_nights)) && Number(period.min_nights) > 0 ? Number(period.min_nights) : null;
+              batch.push(env.DB.prepare("INSERT INTO price_offer_periods (id, price_offer_id, valid_from, valid_to, price_amount, min_nights) VALUES (?, ?, ?, ?, ?, ?)").bind(id(), targetOfferId, period.valid_from, period.valid_to, periodAmount, periodMin));
+            }
           }
           const galleryImages = safeGalleryImages(price.gallery_images);
           batch.push(env.DB.prepare(
