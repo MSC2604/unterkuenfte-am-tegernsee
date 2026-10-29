@@ -50,8 +50,8 @@ jobs:
               page.on('pageerror', error => pageErrors.push(error.message));
               let loaded = false;
               for (let attempt = 1; attempt <= 5 && !loaded; attempt++) {
-                await page.goto('https://msc2604.github.io/unterkuenfte-am-tegernsee/?smoke=' + Date.now(), { waitUntil: 'networkidle', timeout: 60000 });
-                await page.waitForTimeout(2500);
+                await page.goto('https://msc2604.github.io/unterkuenfte-am-tegernsee/?smoke=' + Date.now(), { waitUntil: 'domcontentloaded', timeout: 60000 });
+                await page.waitForTimeout(6000);
                 const cards = await page.locator('.result-card').count();
                 const errorMessage = await page.locator('#resultsGrid').innerText().catch(() => '');
                 if (cards > 0) {
