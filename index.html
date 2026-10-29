@@ -401,6 +401,14 @@ const menuToggle=document.querySelector('#menuToggle');
 const mainMenu=document.querySelector('#mainMenu');
 const FAVORITES_KEY='unterkuenfte_favorites_v1';
 const RECENT_KEY='unterkuenfte_recent_v1';
+const PERSONAL_GREETING_DEVICE_KEY='unterkuenfte_personal_greeting_this_device_v1';
+// Diese Einstellung wird ausschließlich lokal in diesem Browser gespeichert.
+try{
+ const greetingSetup=new URLSearchParams(window.location.search).get('persoenliche-anrede');
+ if(greetingSetup==='aktivieren')localStorage.setItem(PERSONAL_GREETING_DEVICE_KEY,'1');
+ if(greetingSetup==='deaktivieren')localStorage.removeItem(PERSONAL_GREETING_DEVICE_KEY);
+ if(greetingSetup==='aktivieren'||greetingSetup==='deaktivieren')history.replaceState(null,'',window.location.pathname+window.location.hash);
+}catch{}
 let favoritesOnly=false;
 function readFavorites(){try{const v=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]');return Array.isArray(v)?v.map(String):[]}catch{return []}}
 function writeFavorites(ids){try{localStorage.setItem(FAVORITES_KEY,JSON.stringify(ids))}catch{}}
@@ -626,7 +634,9 @@ function buildReservationDialog(){
   saveReservationContact();
   const dateFormat=value=>{const parts=value.split('-');return parts.length===3?parts[2]+'.'+parts[1]+'.'+parts[0]:value};
   const selectedPhrase=kind==='apartment'?'Ihre Ferienwohnung':kind==='room'?'Ihr Zimmer':'Ihre gewünschte Einheit';
-  const personalLandlordName=String(a.landlord_name||'').trim();
+  let personalGreetingEnabled=false;
+  try{personalGreetingEnabled=localStorage.getItem(PERSONAL_GREETING_DEVICE_KEY)==='1'}catch{}
+  const personalLandlordName=personalGreetingEnabled?String(a.landlord_name||'').trim():'';
   const greeting=personalLandlordName?'Sehr geehrte Familie '+personalLandlordName+',':'Sehr geehrte Damen und Herren,';
   const opening=selected
    ? 'ich möchte unverbindlich anfragen, ob '+selectedPhrase+' „'+selectedText+'“ im gewünschten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
