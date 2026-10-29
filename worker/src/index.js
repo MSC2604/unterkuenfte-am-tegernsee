@@ -62,6 +62,10 @@ async function incrementResearchUsage(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS research_usage (usage_key TEXT PRIMARY KEY, request_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
   await env.DB.prepare("INSERT INTO research_usage (usage_key, request_count) VALUES ('research', 1) ON CONFLICT(usage_key) DO UPDATE SET request_count = request_count + 1, updated_at = CURRENT_TIMESTAMP").run();
 }
+async function ensureCommunityTables(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS app_analytics (event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, accommodation_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS visitor_feedback (feedback_id TEXT PRIMARY KEY, feedback_type TEXT NOT NULL, message TEXT NOT NULL, page_url TEXT, status TEXT NOT NULL DEFAULT 'new', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+}
 function safeAccommodationImage(value) {
   return typeof value === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(value) && value.length <= 260000 ? value : "";
 }
@@ -185,6 +189,31 @@ export default {
       return json({ ok: true });
     }
 
+    if (request.method === "POST" && path === "/api/analytics/view") {
+      try {
+        const body = await request.json();
+        const eventType = body?.event_type === "accommodation" ? "accommodation" : "page";
+        const accommodationId = typeof body?.accommodation_id === "string" ? body.accommodation_id.slice(0, 80) : null;
+        await ensureCommunityTables(env);
+        await env.DB.prepare("INSERT INTO app_analytics (event_id, event_type, accommodation_id) VALUES (?, ?, ?)").bind(id(), eventType, accommodationId).run();
+        return json({ success: true });
+      } catch (error) { console.error("Analytics write failed:", error); return json({ error: "Besuch konnte nicht gezählt werden." }, 500); }
+    }
+    if (request.method === "POST" && path === "/api/feedback") {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
+      const allowedTypes = ["suggestion", "correction", "question"];
+      const feedbackType = allowedTypes.includes(body?.feedback_type) ? body.feedback_type : "";
+      const message = typeof body?.message === "string" ? body.message.trim().slice(0, 3000) : "";
+      if (!feedbackType || message.length < 5) return json({ error: "Bitte wähle eine Kategorie und gib eine Nachricht mit mindestens 5 Zeichen ein." }, 400);
+      const pageUrl = typeof body?.page_url === "string" ? body.page_url.slice(0, 1000) : "";
+      try {
+        await ensureCommunityTables(env);
+        await env.DB.prepare("INSERT INTO visitor_feedback (feedback_id, feedback_type, message, page_url) VALUES (?, ?, ?, ?)").bind(id(), feedbackType, message, pageUrl).run();
+        return json({ success: true });
+      } catch (error) { console.error("Feedback save failed:", error); return json({ error: "Die Meldung konnte nicht gespeichert werden." }, 500); }
+    }
+
     if (request.method === "GET" && path === "/api/site-settings") {
       try { return json({ settings: await readSiteSettings(env) }); }
       catch (error) { console.error("Site settings read failed:", error); return json({ error: "Seiteneinstellungen konnten nicht geladen werden." }, 503); }
@@ -273,6 +302,25 @@ export default {
 
     if (path.startsWith("/api/admin/")) {
       if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (request.method === "GET" && path === "/api/admin/analytics") {
+        await ensureCommunityTables(env);
+        const totals = await env.DB.prepare("SELECT event_type, COUNT(*) AS total FROM app_analytics GROUP BY event_type").all();
+        const accommodationViews = await env.DB.prepare("SELECT accommodation_id, COUNT(*) AS total FROM app_analytics WHERE event_type = 'accommodation' AND accommodation_id IS NOT NULL GROUP BY accommodation_id ORDER BY total DESC LIMIT 30").all();
+        return json({ totals: Object.fromEntries((totals.results || []).map(row => [row.event_type, Number(row.total || 0)])), accommodation_views: accommodationViews.results || [] });
+      }
+      if (request.method === "GET" && path === "/api/admin/feedback") {
+        await ensureCommunityTables(env);
+        const { results } = await env.DB.prepare("SELECT feedback_id, feedback_type, message, page_url, status, created_at FROM visitor_feedback ORDER BY created_at DESC LIMIT 100").all();
+        return json({ feedback: results || [] });
+      }
+      if (request.method === "POST" && path === "/api/admin/feedback/status") {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültige Anfrage." }, 400); }
+        if (typeof body?.feedback_id !== "string" || !["new", "reviewed"].includes(body?.status)) return json({ error: "Ungültiger Status." }, 400);
+        await ensureCommunityTables(env);
+        await env.DB.prepare("UPDATE visitor_feedback SET status = ? WHERE feedback_id = ?").bind(body.status, body.feedback_id).run();
+        return json({ success: true });
+      }
       if (request.method === "GET" && path === "/api/admin/site-settings") {
         try { return json({ settings: await readSiteSettings(env) }); }
         catch { return json({ error: "Seiteneinstellungen konnten nicht geladen werden." }, 503); }
