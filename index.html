@@ -312,8 +312,8 @@ input,select{outline-color:#5277a6}
 <a href="#aboutApp">Über die App</a>
 <div class="menu-divider"></div>
 <a href="admin.html#research-usage">Suchkontingent anzeigen</a>
-<a href="admin.html#site-settings">Titelbild ändern</a>
-<a href="admin.html#site-settings">Titelbild-Text ändern</a>
+<a href="admin.html#site-settings-image">Titelbild ändern</a>
+<a href="admin.html#site-settings-text">Titelbild-Text ändern</a>
 <a href="admin.html">Verwaltung</a>
 </div>
 </div>
@@ -480,6 +480,8 @@ async function renderMapLinks(){
  const token=++mapRenderToken;
  if(!cards.length){root.innerHTML='<p class="muted">Noch keine Unterkünfte geladen.</p>';status.textContent='Noch keine freigegebenen Unterkünfte vorhanden.';return}
  root.innerHTML=cards.map(card=>{const a=loadedAccommodations.get(card.dataset.accommodationId)||{};const query=[a.address,a.town,'Tegernsee'].filter(Boolean).join(', ');return '<p><a href="https://www.openstreetmap.org/search?query='+encodeURIComponent(query)+'" target="_blank" rel="noopener noreferrer">'+esc(a.name||'Unterkunft')+' – '+esc(a.town||a.address||'Standort suchen')+'</a></p>'}).join('');
+ // Die Adresssuche erst starten, wenn die Kartenansicht tatsächlich geöffnet wurde.
+ if(!document.querySelector('#mapPanel').classList.contains('open'))return;
  if(!window.L){status.textContent='Die Kartenbibliothek konnte nicht geladen werden. Du kannst die einzelnen Standorte weiterhin über die Links öffnen.';return}
  if(!accommodationMap){accommodationMap=L.map(mapRoot).setView([47.7,11.75],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap-Mitwirkende'}).addTo(accommodationMap);accommodationMapLayer=L.featureGroup().addTo(accommodationMap);}
  accommodationMapLayer.clearLayers();
