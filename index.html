@@ -289,6 +289,19 @@ input,select{outline-color:#5277a6}
 .hero.has-title-image .hero-inner{min-height:300px;}
 .hero.has-title-image h1,.hero.has-title-image .hero p,.hero.has-title-image .eyebrow{text-shadow:0 2px 12px rgba(10,27,48,.65);}
 @media(max-width:760px){.hero.has-title-image .hero-inner{min-height:280px;padding-top:64px;padding-bottom:52px}.hero.has-title-image h1{max-width:100%;}.hero.has-title-image .hero p{max-width:100%;}}
+
+/* Startseite: Überschrift über dem Titelbild, Beschreibung darunter – kein Text über dem Bild */
+.hero{background:#244a79;color:#fff;border-radius:0 0 22px 22px;overflow:visible;box-shadow:0 8px 24px rgba(36,74,121,.12)}
+.hero-inner{width:min(760px,100% - 28px);min-height:0;display:block;padding:28px 0 20px;position:relative}
+.hero-heading{padding-right:56px}
+.hero .eyebrow{color:#dbe7f8;letter-spacing:1.2px;font-size:12px;font-weight:800;text-transform:uppercase}
+.hero h1{font-size:clamp(30px,7vw,42px);line-height:1.1;letter-spacing:-1px;margin:10px 0 0;color:#fff}
+.hero .menu-wrap{top:22px;right:0}
+.title-image-area{width:100%;height:280px;background:#e8eff8;background-position:center;background-size:cover;background-repeat:no-repeat}
+.title-image-area:not(.has-image){display:none}
+.hero-subtitle-wrap{width:min(760px,100% - 28px);margin:0 auto;padding:18px 0 24px}
+.hero-subtitle-wrap p{margin:0;color:#edf3fc;font-size:15px;line-height:1.55;max-width:650px}
+@media(max-width:600px){.hero-inner{padding:25px 0 17px}.hero h1{font-size:clamp(29px,8vw,38px)}.title-image-area{height:230px}.hero-subtitle-wrap{padding:16px 0 22px}}
 </style>
 </head>
 <body>
@@ -309,23 +322,14 @@ input,select{outline-color:#5277a6}
 <a href="admin.html">Verwaltung</a>
 </div>
 </div>
-<div>
+<div class="hero-heading">
 <div class="eyebrow">Ankommen · Durchatmen · Wohlfühlen</div>
 <h1 id="heroTitle">Ein schöner Platz.<br>Ganz nah am See.</h1>
-<p id="heroSubtitle">Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.</p>
 </div>
-<svg class="hero-art" viewBox="0 0 480 310" role="img" aria-label="Illustration der Berge und des Tegernsees">
-<circle cx="340" cy="70" r="34" fill="#f1dca8"/>
-<path d="M12 206 112 76 181 158 258 45 389 206Z" fill="#d5e7d9" opacity=".94"/>
-<path d="m76 122 36-46 31 37-17-5-14 9-13-4Z" fill="#fff" opacity=".9"/>
-<path d="m218 99 40-54 49 69-22-12-15 7-17-13-13 8Z" fill="#fff" opacity=".9"/>
-<path d="M0 211 91 145 167 193 251 123 335 184 418 132 480 172V310H0Z" fill="#8eb6a3"/>
-<path d="M0 232 89 192 169 224 251 179 339 223 420 188 480 210V310H0Z" fill="#5e9b92"/>
-<path d="M0 252Q90 229 170 252T340 250T480 244V310H0Z" fill="#9ccfc8"/>
-<path d="M0 270Q88 254 173 270T344 267T480 262V310H0Z" fill="#d1e8df" opacity=".8"/>
-<path d="M40 213 72 196 90 207 116 190 140 207 166 199 186 214Z" fill="#3f756b"/>
-<path d="M305 218 334 196 355 210 377 190 403 208 427 198 451 216Z" fill="#3f756b"/>
-</svg>
+</div>
+<div id="titleImageArea" class="title-image-area" role="img" aria-label="Titelbild der Unterkunfts-App"></div>
+<div class="hero-subtitle-wrap">
+<p id="heroSubtitle">Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.</p>
 </div>
 </header>
 <main>
@@ -423,7 +427,7 @@ function applyFavoritesFilter(){const grid=document.querySelector('#resultsGrid'
 function readRecent(){try{const v=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');return Array.isArray(v)?v.map(String).slice(0,20):[]}catch{return []}}
 function saveRecent(id){const ids=readRecent().filter(x=>x!==String(id));ids.unshift(String(id));try{localStorage.setItem(RECENT_KEY,JSON.stringify(ids.slice(0,20)))}catch{}}
 function renderRecent(){const root=$('recentLinks');const ids=readRecent();root.innerHTML=ids.length?ids.map(id=>{const a=loadedAccommodations.get(id);return a?'<p><a href="#listingPreview" data-recent-id="'+esc(id)+'">'+esc(a.name||'Unterkunft')+' – '+esc(a.town||'Tegernseer Tal')+'</a></p>':''}).filter(Boolean).join(''):'<p>Noch keine Unterkünfte angesehen.</p>';}
-async function loadSiteSettings(){try{const response=await fetch(API_BASE+'/api/site-settings',{headers:{'Accept':'application/json'}});if(!response.ok)return;const data=await response.json();const settings=data.settings||{};if(settings.title)document.querySelector('#heroTitle').textContent=settings.title;if(settings.subtitle)document.querySelector('#heroSubtitle').textContent=settings.subtitle;if(settings.image){const hero=document.querySelector('.hero');hero.style.backgroundImage='linear-gradient(145deg,rgba(25,59,104,.30),rgba(36,74,121,.22)),url("'+settings.image.replace(/"/g,'')+'")';hero.style.backgroundSize='cover';hero.style.backgroundPosition='center';hero.classList.add('has-title-image');}}catch{}}
+async function loadSiteSettings(){try{const response=await fetch(API_BASE+'/api/site-settings',{headers:{'Accept':'application/json'}});if(!response.ok)return;const data=await response.json();const settings=data.settings||{};if(settings.title)document.querySelector('#heroTitle').textContent=settings.title;if(settings.subtitle)document.querySelector('#heroSubtitle').textContent=settings.subtitle;if(settings.image){const imageArea=document.querySelector('#titleImageArea');imageArea.style.backgroundImage='url("'+settings.image.replace(/"/g,'')+'")';imageArea.classList.add('has-image');}}catch{}}
 const $=id=>document.getElementById(id);
 mainMenu.addEventListener('click',event=>{
  if(event.target.closest('a')){
