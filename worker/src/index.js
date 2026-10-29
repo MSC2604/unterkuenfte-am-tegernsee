@@ -120,6 +120,12 @@ async function ensureTilePriceAbColumn(env) {
     await env.DB.prepare("ALTER TABLE accommodations ADD COLUMN show_tile_price_ab INTEGER NOT NULL DEFAULT 1").run();
   }
 }
+async function ensureLandlordNameColumn(env) {
+  const { results } = await env.DB.prepare("PRAGMA table_info(accommodations)").all();
+  if (!results.some(column => column.name === "landlord_name")) {
+    await env.DB.prepare("ALTER TABLE accommodations ADD COLUMN landlord_name TEXT").run();
+  }
+}
 async function ensureBookingCalendarUrlColumn(env) {
   const { results } = await env.DB.prepare("PRAGMA table_info(price_offers)").all();
   if (!results.some(column => column.name === "booking_calendar_url")) {
@@ -223,6 +229,7 @@ export default {
       try {
         await ensureAccommodationCalendarColumn(env);
         await ensureTilePriceAbColumn(env);
+        await ensureLandlordNameColumn(env);
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
         await ensureFuturePriceColumns(env);
@@ -236,7 +243,7 @@ export default {
         const hasValidStay = validDate(arrival) && validDate(departure) && departure > arrival;
         await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
-          `SELECT a.id, a.name, a.town, a.address, a.type, a.description,
+          `SELECT a.id, a.name, a.landlord_name, a.town, a.address, a.type, a.description,
                   a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url,
                   a.updated_at, a.show_tile_price_ab, ai.image_data AS image_url
              FROM accommodations a
@@ -450,6 +457,7 @@ export default {
       }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         await ensureTilePriceAbColumn(env);
+        await ensureLandlordNameColumn(env);
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
         await ensureFuturePriceColumns(env);
@@ -460,7 +468,7 @@ export default {
         await ensureShowPriceAbColumn(env);
         await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
-          "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url, a.show_tile_price_ab, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
+          "SELECT a.id, a.name, a.landlord_name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url, a.show_tile_price_ab, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
         ).all();
         const { results: offers } = await env.DB.prepare(
           "SELECT id, accommodation_id, price_amount, future_price_amount, future_price_from, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, display_order, source_url, source_name, booking_calendar_url FROM price_offers ORDER BY researched_at DESC"
@@ -478,6 +486,7 @@ export default {
       }
       if (request.method === "POST" && /^\/api\/admin\/accommodations\/[^/]+\/update$/.test(path)) {
         await ensureTilePriceAbColumn(env);
+        await ensureLandlordNameColumn(env);
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
         await ensureFuturePriceColumns(env);
@@ -497,8 +506,8 @@ export default {
         await ensureAccommodationImageTable(env);
         const batch = [
           env.DB.prepare(
-            "UPDATE accommodations SET name = ?, town = ?, address = ?, type = ?, description = ?, website_url = ?, contact_email = ?, contact_phone = ?, booking_url = ?, booking_calendar_url = ?, show_tile_price_ab = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND published = 1"
-          ).bind(p.name.trim().slice(0, 300), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), (typeof p.booking_calendar_url === "string" && /^https?:\/\//i.test(p.booking_calendar_url.trim()) ? p.booking_calendar_url.trim().slice(0, 2000) : null), p.show_tile_price_ab === false || p.show_tile_price_ab === 0 ? 0 : 1, accommodationId)
+            "UPDATE accommodations SET name = ?, landlord_name = ?, town = ?, address = ?, type = ?, description = ?, website_url = ?, contact_email = ?, contact_phone = ?, booking_url = ?, booking_calendar_url = ?, show_tile_price_ab = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND published = 1"
+          ).bind(p.name.trim().slice(0, 300), str("landlord_name"), str("town"), str("address"), str("type"), str("description"), str("website_url"), str("contact_email"), str("contact_phone"), str("booking_url"), (typeof p.booking_calendar_url === "string" && /^https?:\/\//i.test(p.booking_calendar_url.trim()) ? p.booking_calendar_url.trim().slice(0, 2000) : null), p.show_tile_price_ab === false || p.show_tile_price_ab === 0 ? 0 : 1, accommodationId)
         ];
         if (typeof p.image_url === "string") {
           const image = safeAccommodationImage(p.image_url);
@@ -638,6 +647,7 @@ export default {
         return json({ success: (result.meta?.changes || 0) > 0 });
       }
       if (request.method === "POST" && /^\/api\/admin\/drafts\/[^/]+\/approve$/.test(path)) {
+        await ensureLandlordNameColumn(env);
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
         await ensureFuturePriceColumns(env);
@@ -655,14 +665,15 @@ export default {
         if (!payload.name || typeof payload.name !== "string") return json({ error: "Vor Freigabe muss ein Unterkunftsname vorhanden sein." }, 400);
         const accommodationId = id();
         const fields = ["town", "address", "type", "description", "website_url", "contact_email", "contact_phone", "booking_url"];
+        const landlordName = typeof payload.landlord_name === "string" ? payload.landlord_name.trim().slice(0, 300) || null : null;
         const calendarUrl = typeof payload.booking_calendar_url === "string" && /^https?:\/\//i.test(payload.booking_calendar_url.trim()) ? payload.booking_calendar_url.trim().slice(0, 2000) : null;
         const values = fields.map(key => typeof payload[key] === "string" ? payload[key].slice(0, 3000) : null);
         await ensureAccommodationImageTable(env);
         const batch = [
           env.DB.prepare(
-            `INSERT INTO accommodations (id, name, town, address, type, description, website_url, contact_email, contact_phone, booking_url, booking_calendar_url, published)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
-          ).bind(accommodationId, payload.name.slice(0, 300), ...values, calendarUrl)
+            `INSERT INTO accommodations (id, name, landlord_name, town, address, type, description, website_url, contact_email, contact_phone, booking_url, booking_calendar_url, published)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
+          ).bind(accommodationId, payload.name.slice(0, 300), landlordName, ...values, calendarUrl)
         ];
         const accommodationImage = safeAccommodationImage(payload.image_url);
         if (accommodationImage) batch.push(env.DB.prepare("INSERT INTO accommodation_images (accommodation_id, image_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)").bind(accommodationId, accommodationImage));
