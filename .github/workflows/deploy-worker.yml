@@ -29,3 +29,25 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           command: deploy
+      - name: Öffentliche Unterkünfte-API nach Veröffentlichung prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors --output /tmp/accommodations-response.json --write-out '%{http_code}' 'https://unterkuenfte-am-tegernsee-api.msc4021.workers.dev/api/accommodations')"
+          STATUS="$status" node <<'NODE'
+          const fs = require('fs');
+          const status = Number(process.env.STATUS);
+          const body = fs.readFileSync('/tmp/accommodations-response.json', 'utf8');
+          let data;
+          try { data = JSON.parse(body); } catch {
+            console.error('API returned non-JSON response; HTTP', status);
+            console.error(body.slice(0, 500));
+            process.exit(1);
+          }
+          if (status !== 200 || !Array.isArray(data.accommodations)) {
+            console.error('Accommodation API smoke test failed; HTTP', status);
+            console.error(JSON.stringify({ error: data.error, diagnostic: data.diagnostic }));
+            process.exit(1);
+          }
+          console.log('Accommodation API smoke test passed; published entries:', data.accommodations.length);
+          NODE
