@@ -362,7 +362,6 @@ input,select{outline-color:#5277a6}
 <div id="mapPanel" class="map-panel"><h3>Unterkünfte auf der Karte</h3><p>Die Karte zeigt Standorte, die sich anhand der gespeicherten Adresse zuordnen lassen. Bitte beachte: Die Markierung ist ein Orientierungspunkt und keine bestätigte Hauseingangsposition.</p><div id="accommodationMap" role="application" aria-label="Karte der Unterkünfte"></div><p id="mapStatus" class="map-note" role="status">Die Karte wird vorbereitet.</p><div id="mapLinks"></div></div>
 <div id="contactPanel" class="community-panel"><h3>Kontakt und unverbindliche Anfrage</h3><p>Wähle eine Unterkunft aus. Im nächsten Schritt kannst du den Reisezeitraum und – falls gewünscht – eine bestimmte Wohnung auswählen.</p><label for="contactAccommodation">Unterkunft</label><select id="contactAccommodation"><option value="">Unterkunft auswählen …</option></select><button id="startContactRequest" type="button">Anfrage vorbereiten</button><p id="contactRequestStatus" class="community-status" role="status"></p></div>
 <div id="recentPanel" class="community-panel"><h3>Zuletzt angesehen</h3><div id="recentLinks"></div></div>
-<div id="feedbackPanel" class="community-panel"><h3>Unterkunft vorschlagen oder Fehler melden</h3><p>Deine Nachricht wird an die Verwaltung übermittelt und vor einer Änderung geprüft.</p><label for="feedbackType">Worum geht es?</label><select id="feedbackType"><option value="suggestion">Unterkunft vorschlagen</option><option value="correction">Fehler oder Änderung melden</option><option value="question">Frage zur App</option></select><label for="feedbackMessage">Nachricht</label><textarea id="feedbackMessage" maxlength="3000" placeholder="Name der Unterkunft, Ort und deine Nachricht …"></textarea><button id="sendFeedback" type="button">Nachricht senden</button><p id="feedbackStatus" class="community-status" role="status"></p></div>
 <div id="resultsGrid" class="results-grid" aria-live="polite"><p class="price-disclaimer">Freigegebene Unterkünfte werden geladen …</p></div>
 </section>
 <section aria-labelledby="browseTitle">
@@ -722,7 +721,6 @@ galleryLightbox.querySelector('.gallery-lightbox-next').addEventListener('click'
 galleryLightbox.addEventListener('click',event=>{if(event.target===galleryLightbox)closeLightbox();});
 document.addEventListener('keydown',event=>{if(!galleryLightbox.classList.contains('open'))return;if(event.key==='Escape')closeLightbox();if(event.key==='ArrowLeft')stepLightbox(-1);if(event.key==='ArrowRight')stepLightbox(1);});
 document.querySelector('#recentLinks').addEventListener('click',event=>{const link=event.target.closest('[data-recent-id]');if(!link)return;const card=document.querySelector('.result-card[data-accommodation-id="'+CSS.escape(link.dataset.recentId)+'"]');if(card){const button=card.querySelector('.details-toggle');if(button&&!card.classList.contains('expanded'))button.click();card.scrollIntoView({behavior:'smooth',block:'start'});}});
-$('sendFeedback').addEventListener('click',async()=>{const message=$('feedbackMessage').value.trim();const button=$('sendFeedback');if(message.length<5){$('feedbackStatus').textContent='Bitte gib eine Nachricht mit mindestens 5 Zeichen ein.';return}button.disabled=true;$('feedbackStatus').textContent='Nachricht wird gesendet …';try{const response=await fetch(API_BASE+'/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({feedback_type:$('feedbackType').value,message,page_url:location.href})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Übermittlung fehlgeschlagen');$('feedbackMessage').value='';$('feedbackStatus').textContent='Vielen Dank. Deine Nachricht wurde zur Prüfung übermittelt.'}catch(e){$('feedbackStatus').textContent='Die Nachricht konnte nicht gesendet werden: '+e.message}finally{button.disabled=false}});
 document.querySelector('#resultsGrid').addEventListener('click',event=>{
  const favoriteButton=event.target.closest('.favorite-toggle');if(favoriteButton){const card=favoriteButton.closest('.result-card');const id=card?.dataset.accommodationId;if(id){const ids=readFavorites();writeFavorites(ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);applyFavoriteButtons();applyFavoritesFilter();renderMapLinks();renderContactChooser();}return;}
  const clickedImage=event.target.closest('.unit-gallery-images img');
@@ -744,7 +742,7 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
   return;
  }
  const unitReservationButton=event.target.closest('.unit-reservation-open');
- if(unitReservationButton){fetch(API_BASE+'/api/analytics/view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_type:'accommodation',accommodation_id:unitReservationButton.dataset.reservationId})}).catch(()=>{});openReservation(unitReservationButton.dataset.reservationId,unitReservationButton.dataset.unitName,unitReservationButton.dataset.unitId);return;}
+ if(unitReservationButton){openReservation(unitReservationButton.dataset.reservationId,unitReservationButton.dataset.unitName,unitReservationButton.dataset.unitId);return;}
  const reservationButton=event.target.closest('.reservation-open');
  if(reservationButton){openReservation(reservationButton.dataset.reservationId);return;}
  const button=event.target.closest('.details-toggle');
@@ -752,7 +750,7 @@ document.querySelector('#resultsGrid').addEventListener('click',event=>{
  const card=button.closest('.result-card');
  saveRecent(card.dataset.accommodationId);renderRecent();
  const expanded=card.classList.toggle('expanded');
- if(expanded)fetch(API_BASE+'/api/analytics/view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_type:'accommodation',accommodation_id:card.dataset.accommodationId})}).catch(()=>{});
+
  button.setAttribute('aria-expanded',String(expanded));
  button.textContent=expanded?'Details schließen':(button.dataset.defaultLabel||reservationLabel(loadedAccommodations.get(card.dataset.accommodationId)||{}));
 });
@@ -795,7 +793,6 @@ place.addEventListener('change',()=>{if(document.querySelector('#resultsGrid').d
 
 // Beim Öffnen der Hauptseite alle freigegebenen Unterkünfte automatisch anzeigen – keine Suche nötig.
 loadSiteSettings();
-fetch(API_BASE+'/api/analytics/view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_type:'page'})}).catch(()=>{});
 loadAccommodations();
 
 </script>
