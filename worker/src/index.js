@@ -45,6 +45,23 @@ function id() {
 async function ensureAccommodationImageTable(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accommodation_images (accommodation_id TEXT PRIMARY KEY, image_data TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
 }
+async function ensureSiteSettingsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+}
+async function readSiteSettings(env) {
+  await ensureSiteSettingsTable(env);
+  const { results } = await env.DB.prepare("SELECT setting_key, setting_value FROM site_settings").all();
+  const settings = Object.fromEntries(results.map(row => [row.setting_key, row.setting_value]));
+  return {
+    title: typeof settings.title === "string" ? settings.title : "Ein schöner Platz. Ganz nah am See.",
+    subtitle: typeof settings.subtitle === "string" ? settings.subtitle : "Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.",
+    image: typeof settings.image === "string" ? settings.image : ""
+  };
+}
+async function incrementResearchUsage(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS research_usage (usage_key TEXT PRIMARY KEY, request_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  await env.DB.prepare("INSERT INTO research_usage (usage_key, request_count) VALUES ('research', 1) ON CONFLICT(usage_key) DO UPDATE SET request_count = request_count + 1, updated_at = CURRENT_TIMESTAMP").run();
+}
 function safeAccommodationImage(value) {
   return typeof value === "string" && /^data:image\/(jpeg|webp|png);base64,/i.test(value) && value.length <= 260000 ? value : "";
 }
@@ -168,6 +185,11 @@ export default {
       return json({ ok: true });
     }
 
+    if (request.method === "GET" && path === "/api/site-settings") {
+      try { return json({ settings: await readSiteSettings(env) }); }
+      catch (error) { console.error("Site settings read failed:", error); return json({ error: "Seiteneinstellungen konnten nicht geladen werden." }, 503); }
+    }
+
     if (request.method === "GET" && path === "/api/accommodations") {
       try {
         await ensureAccommodationCalendarColumn(env);
@@ -251,6 +273,32 @@ export default {
 
     if (path.startsWith("/api/admin/")) {
       if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
+      if (request.method === "GET" && path === "/api/admin/site-settings") {
+        try { return json({ settings: await readSiteSettings(env) }); }
+        catch { return json({ error: "Seiteneinstellungen konnten nicht geladen werden." }, 503); }
+      }
+      if (request.method === "POST" && path === "/api/admin/site-settings") {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
+        if (!body || typeof body !== "object") return json({ error: "Ungültige Einstellungen." }, 400);
+        const title = typeof body.title === "string" ? body.title.trim().slice(0, 180) : "";
+        const subtitle = typeof body.subtitle === "string" ? body.subtitle.trim().slice(0, 500) : "";
+        const image = typeof body.image === "string" ? body.image : "";
+        if (!title || !subtitle) return json({ error: "Überschrift und Untertitel dürfen nicht leer sein." }, 400);
+        if (image && !safeAccommodationImage(image)) return json({ error: "Das Titelbild ist ungültig oder zu groß. Bitte ein kleineres Bild wählen." }, 400);
+        await ensureSiteSettingsTable(env);
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('title', ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP").bind(title),
+          env.DB.prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('subtitle', ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP").bind(subtitle),
+          env.DB.prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('image', ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP").bind(image)
+        ]);
+        return json({ success: true, settings: { title, subtitle, image } });
+      }
+      if (request.method === "GET" && path === "/api/admin/research-usage") {
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS research_usage (usage_key TEXT PRIMARY KEY, request_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+        const row = await env.DB.prepare("SELECT request_count, updated_at FROM research_usage WHERE usage_key = 'research'").first();
+        return json({ requests: Number(row?.request_count || 0), updated_at: row?.updated_at || null, note: "Gezählt werden Rechercheversuche dieser App seit Aktivierung der Zählung. Das tatsächliche Restkontingent des Suchanbieters kann hier nicht direkt ausgelesen werden." });
+      }
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
@@ -261,6 +309,7 @@ export default {
           return json({ error: "Bitte einen Unterkunftsnamen oder eine Website als query angeben." }, 400);
         }
         const query = body.query.trim().slice(0, 300);
+        try { await incrementResearchUsage(env); } catch (error) { console.error("Research usage tracking failed:", error); }
         let searchResponse;
         try {
           searchResponse = await fetch("https://api.tavily.com/search", {
