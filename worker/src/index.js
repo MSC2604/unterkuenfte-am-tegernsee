@@ -307,6 +307,31 @@ export default {
       }
     }
 
+    if (request.method === "GET" && path === "/api/research-usage") {
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tavily_usage_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+      try {
+        if (!env.TAVILY_API_KEY) throw new Error("TAVILY_API_KEY ist im Unterkunfts-Worker nicht eingerichtet.");
+        const response = await fetch("https://api.tavily.com/usage", { method: "GET", headers: { Authorization: `Bearer ${env.TAVILY_API_KEY}` }, cache: "no-store" });
+        let data = {};
+        try { data = await response.json(); } catch {}
+        if (!response.ok) throw new Error(`Tavily Usage HTTP-Fehler (${response.status}).`);
+        const key = data.key || {};
+        const account = data.account || {};
+        const usedRaw = account.plan_usage ?? key.usage;
+        const limitRaw = account.plan_limit ?? key.limit;
+        const used = usedRaw != null && Number.isFinite(Number(usedRaw)) ? Number(usedRaw) : null;
+        const limit = limitRaw != null && Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : null;
+        if (used === null || limit === null || limit <= 0) throw new Error("Tavily hat keine auswertbaren Verbrauchswerte geliefert.");
+        const payload = { available: true, used, limit, remaining: Math.max(0, limit - used), percent: Math.max(0, Math.min(100, Math.round(used / limit * 100))) };
+        await env.DB.prepare("INSERT INTO tavily_usage_cache (cache_key, payload, updated_at) VALUES ('account', ?, CURRENT_TIMESTAMP) ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP").bind(JSON.stringify(payload)).run();
+        return json({ ...payload, cached: false, updated_at: new Date().toISOString() });
+      } catch (error) {
+        const cached = await env.DB.prepare("SELECT payload, updated_at FROM tavily_usage_cache WHERE cache_key = 'account'").first();
+        if (cached) return json({ ...JSON.parse(cached.payload), cached: true, updated_at: cached.updated_at, note: "Tavily ist momentan nicht erreichbar. Angezeigt werden die zuletzt erfolgreich abgerufenen Werte." });
+        return json({ available: false, error: error instanceof Error ? error.message : "Tavily-Kontingent konnte nicht abgerufen werden." }, 502);
+      }
+    }
+
     if (path.startsWith("/api/admin/")) {
       if (!await adminAuthorized(request, env)) return json({ error: "Nicht autorisiert." }, 401);
       if (request.method === "GET" && path === "/api/admin/analytics") {
@@ -349,30 +374,7 @@ export default {
         ]);
         return json({ success: true, settings: { title, subtitle, image } });
       }
-      if (request.method === "GET" && path === "/api/admin/research-usage") {
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tavily_usage_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
-        try {
-          if (!env.TAVILY_API_KEY) throw new Error("TAVILY_API_KEY ist im Unterkunfts-Worker nicht eingerichtet.");
-          const response = await fetch("https://api.tavily.com/usage", { method: "GET", headers: { Authorization: `Bearer ${env.TAVILY_API_KEY}` }, cache: "no-store" });
-          let data = {};
-          try { data = await response.json(); } catch {}
-          if (!response.ok) throw new Error(`Tavily Usage HTTP-Fehler (${response.status}).`);
-          const key = data.key || {};
-          const account = data.account || {};
-          const usedRaw = account.plan_usage ?? key.usage;
-          const limitRaw = account.plan_limit ?? key.limit;
-          const used = usedRaw != null && Number.isFinite(Number(usedRaw)) ? Number(usedRaw) : null;
-          const limit = limitRaw != null && Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : null;
-          if (used === null || limit === null || limit <= 0) throw new Error("Tavily hat keine auswertbaren Verbrauchswerte geliefert.");
-          const payload = { available: true, used, limit, remaining: Math.max(0, limit - used), percent: Math.max(0, Math.min(100, Math.round(used / limit * 100))) };
-          await env.DB.prepare("INSERT INTO tavily_usage_cache (cache_key, payload, updated_at) VALUES ('account', ?, CURRENT_TIMESTAMP) ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP").bind(JSON.stringify(payload)).run();
-          return json({ ...payload, cached: false, updated_at: new Date().toISOString() });
-        } catch (error) {
-          const cached = await env.DB.prepare("SELECT payload, updated_at FROM tavily_usage_cache WHERE cache_key = 'account'").first();
-          if (cached) return json({ ...JSON.parse(cached.payload), cached: true, updated_at: cached.updated_at, note: "Tavily ist momentan nicht erreichbar. Angezeigt werden die zuletzt erfolgreich abgerufenen Werte." });
-          return json({ available: false, error: error instanceof Error ? error.message : "Tavily-Kontingent konnte nicht abgerufen werden." }, 502);
-        }
-      }
+
       if (request.method === "POST" && path === "/api/admin/research") {
         if (!env.TAVILY_API_KEY) {
           return json({ error: "Automatische Recherche ist noch nicht eingerichtet. Im Worker fehlt das Secret TAVILY_API_KEY." }, 503);
