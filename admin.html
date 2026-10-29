@@ -70,8 +70,8 @@ button.danger{background:#8a3434}
 <h2>Seitendarstellung</h2>
 <p class="muted">Überschrift, Untertitel und Titelbild werden zentral gespeichert und sind anschließend für alle Besucher sichtbar.</p>
 <label for="siteTitle">Überschrift</label><input id="siteTitle" maxlength="180" placeholder="Überschrift der Startseite">
-<label for="siteSubtitle">Untertitel</label><textarea id="siteSubtitle" maxlength="500" placeholder="Kurzer Beschreibungstext"></textarea>
-<label for="siteImageFile">Titelbild vom Handy auswählen</label><input id="siteImageFile" type="file" accept="image/*">
+<label id="site-settings-text" for="siteSubtitle">Untertitel</label><textarea id="siteSubtitle" maxlength="500" placeholder="Kurzer Beschreibungstext"></textarea>
+<label id="site-settings-image" for="siteImageFile">Titelbild vom Handy auswählen</label><input id="siteImageFile" type="file" accept="image/*">
 <img id="siteImagePreview" class="accommodation-image-preview" alt="Vorschau des Titelbilds" hidden>
 <button id="saveSiteSettings" type="button">Titelbild und Text speichern</button><button id="removeSiteImage" class="secondary" type="button">Titelbild entfernen</button>
 <p id="siteSettingsStatus" class="status" role="status">Einstellungen werden nach der Anmeldung geladen.</p>
