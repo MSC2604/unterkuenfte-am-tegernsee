@@ -434,7 +434,7 @@ menuToggle.addEventListener('click',()=>{
  menuToggle.setAttribute('aria-label',opening?'Menü schließen':'Menü öffnen');
 });
 document.addEventListener('click',event=>{
- if(!event.target.closest('.menu-wrap')&&!event.target.closest('.main-menu-panel')){
+ if(!event.target.closest('.menu-wrap')){
   mainMenu.hidden=true;
   menuToggle.setAttribute('aria-expanded','false');
   menuToggle.setAttribute('aria-label','Menü öffnen');
