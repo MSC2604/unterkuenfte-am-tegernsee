@@ -243,7 +243,9 @@ export default {
         return json({ accommodations: results.map(a => ({ ...a, prices: byAccommodation.get(a.id) || [] })) });
       } catch (error) {
         console.error("Public accommodation query failed:", error);
-        return json({ error: "Unterkünfte konnten nicht geladen werden. Datenbank-Schema oder Verbindung prüfen." }, 503);
+        // Temporary, non-data diagnostic: expose only the database error text, never query results.
+        const detail = String(error?.message || error || "Unbekannter Datenbankfehler").slice(0, 300);
+        return json({ error: "Unterkünfte konnten nicht geladen werden.", diagnostic: detail }, 503);
       }
     }
 
