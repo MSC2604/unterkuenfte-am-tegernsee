@@ -572,7 +572,7 @@ function accommodationCard(a){
  const validPrices=prices.filter(p=>!p.price_on_request&&effectiveAmount(p)!==null);
  const lowest=validPrices.length?Math.min(...validPrices.map(p=>effectiveAmount(p))):null;
  const lowestOffer=validPrices.find(p=>effectiveAmount(p)===lowest);
- const showAb=lowestOffer?.show_price_ab!==false&&lowestOffer?.show_price_ab!==0;const priceLine=lowest===null?'Preis auf Anfrage':(showAb?'ab ':'')+money(lowest,lowestOffer?.currency||'EUR');
+ const showTileAb=a.show_tile_price_ab!==false&&a.show_tile_price_ab!==0&&a.show_tile_price_ab!=='0';const priceLine=lowest===null?'Preis auf Anfrage':(showTileAb?'ab ':'')+money(lowest,lowestOffer?.currency||'EUR');
  const futureChanges=prices.filter(p=>p.future_price_from&&String(p.future_price_from)>todayISO&&p.future_price_amount!==null&&p.future_price_amount!==undefined&&p.future_price_amount!==''&&Number.isFinite(Number(p.future_price_amount))&&(p.price_amount===null||p.price_amount===undefined||p.price_amount===''||Number(p.future_price_amount)!==Number(p.price_amount))).sort((x,y)=>String(x.future_price_from).localeCompare(String(y.future_price_from)));
  const changeDate=futureChanges.length?String(futureChanges[0].future_price_from).slice(8,10)+'.'+String(futureChanges[0].future_price_from).slice(5,7)+'.'+String(futureChanges[0].future_price_from).slice(0,4):'';
  const priceChangeNotice=futureChanges.length?'<p class="result-note price-change-notice">Ab '+esc(changeDate)+' gilt der neue Preis<br><strong>'+esc(money(futureChanges[0].future_price_amount,futureChanges[0].currency||'EUR'))+' pro Nacht</strong></p>':'';
