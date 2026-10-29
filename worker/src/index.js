@@ -72,6 +72,14 @@ async function ensureShowPriceAbColumn(env) {
     await env.DB.prepare("ALTER TABLE price_offers ADD COLUMN show_price_ab INTEGER NOT NULL DEFAULT 1").run();
   }
 }
+async function ensurePricePeriodsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS price_offer_periods (
+    id TEXT PRIMARY KEY, price_offer_id TEXT NOT NULL, valid_from TEXT NOT NULL,
+    valid_to TEXT NOT NULL, price_amount REAL NOT NULL, min_nights INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (price_offer_id) REFERENCES price_offers(id) ON DELETE CASCADE
+  )`).run();
+}
 async function ensurePriceDisplayOrderColumn(env) {
   const { results } = await env.DB.prepare("PRAGMA table_info(price_offers)").all();
   if (!results.some(column => column.name === "display_order")) {
@@ -184,6 +192,7 @@ export default {
         await ensureUnitDescriptionColumn(env);
         await ensureShowPriceAbColumn(env);
         await ensurePriceDisplayOrderColumn(env);
+        await ensurePricePeriodsTable(env);
         const offers = await env.DB.prepare(
           `SELECT p.id, p.accommodation_id, p.price_amount, p.currency, p.price_unit,
                   p.min_nights, p.season_label, p.occupancy, p.valid_from, p.valid_to,
@@ -204,18 +213,28 @@ export default {
                   AND p.arrival_date = ? AND p.departure_date = ?
                 )
                 OR (
+                  EXISTS (SELECT 1 FROM price_offer_periods pp WHERE pp.price_offer_id = p.id AND pp.valid_from <= ? AND pp.valid_to >= ?)
+                )
+                OR (
                   p.valid_from IS NOT NULL AND p.valid_to IS NOT NULL
                   AND p.valid_from <= ? AND p.valid_to >= ?
                 )
               )
             ORDER BY p.researched_at DESC`
-        ).bind(hasValidStay ? 1 : 0, arrival, departure, arrival, departure).all();
+        ).bind(hasValidStay ? 1 : 0, arrival, departure, arrival, departure, arrival, departure).all();
+        const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
+        const periodsByOffer = new Map();
+        for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
+        const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
+        const periodsByOffer = new Map();
+        for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
         const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
         const galleryByOffer = new Map();
         for (const gallery of galleries) { try { galleryByOffer.set(gallery.price_offer_id, JSON.parse(gallery.images_json || "[]")); } catch {} }
         const byAccommodation = new Map();
         for (const offer of offers.results) {
           offer.gallery_images = galleryByOffer.get(offer.id) || [];
+          offer.price_periods = periodsByOffer.get(offer.id) || [];
           if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
           byAccommodation.get(offer.accommodation_id).push(offer);
         }
@@ -335,6 +354,7 @@ export default {
         await ensurePriceDisplayNoteColumn(env);
         await ensureUnitDescriptionColumn(env);
         await ensureShowPriceAbColumn(env);
+        await ensurePricePeriodsTable(env);
         await ensureAccommodationImageTable(env);
         const { results } = await env.DB.prepare(
           "SELECT a.id, a.name, a.town, a.address, a.type, a.description, a.website_url, a.contact_email, a.contact_phone, a.booking_url, a.booking_calendar_url, ai.image_data AS image_url FROM accommodations a LEFT JOIN accommodation_images ai ON ai.accommodation_id = a.id WHERE a.published = 1 ORDER BY a.name COLLATE NOCASE"
@@ -348,6 +368,7 @@ export default {
         const byAccommodation = new Map();
         for (const offer of offers) {
           try { offer.gallery_images = galleryByOffer.get(offer.id) || []; } catch { offer.gallery_images = []; }
+          offer.price_periods = periodsByOffer.get(offer.id) || [];
           if (!byAccommodation.has(offer.accommodation_id)) byAccommodation.set(offer.accommodation_id, []);
           byAccommodation.get(offer.accommodation_id).push(offer);
         }
@@ -357,6 +378,7 @@ export default {
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
         await ensureGalleryTable(env);
+        await ensurePricePeriodsTable(env);
         const accommodationId = path.split("/")[4];
         let body;
         try { body = await request.json(); } catch { return json({ error: "Ungültiges JSON." }, 400); }
@@ -436,6 +458,13 @@ export default {
                VALUES (?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(newId, accommodationId, ...values));
             retainedIds.add(newId);
+          }
+          batch.push(env.DB.prepare("DELETE FROM price_offer_periods WHERE price_offer_id = ?").bind(targetOfferId));
+          for (const period of (Array.isArray(price.price_periods) ? price.price_periods : []).slice(0, 30)) {
+            if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(period.valid_from || "")) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(period.valid_to || "")) || period.valid_to < period.valid_from) continue;
+            const periodAmount = Number(period.price_amount); if (!Number.isFinite(periodAmount) || periodAmount < 0) continue;
+            const periodMin = Number.isInteger(Number(period.min_nights)) && Number(period.min_nights) > 0 ? Number(period.min_nights) : null;
+            batch.push(env.DB.prepare("INSERT INTO price_offer_periods (id, price_offer_id, valid_from, valid_to, price_amount, min_nights) VALUES (?, ?, ?, ?, ?, ?)").bind(id(), targetOfferId, period.valid_from, period.valid_to, periodAmount, periodMin));
           }
           const galleryImages = safeGalleryImages(price.gallery_images);
           batch.push(env.DB.prepare(
