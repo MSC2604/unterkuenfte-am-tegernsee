@@ -176,6 +176,14 @@ function setupPricePeriods(el,p={}) {
  el._pricePeriods=Array.isArray(p.price_periods)?p.price_periods.map(x=>({valid_from:x.valid_from||'',valid_to:x.valid_to||'',price_amount:x.price_amount??'',min_nights:x.min_nights??''})):[];
  const wrap=document.createElement('div');wrap.className='wide seasonal-prices';
  wrap.innerHTML='<strong>Saisonpreise für diese Wohnung</strong><p class="muted">Zusätzliche Zeiträume eintragen. Die Wohnung bleibt eine einzige auswählbare Einheit. „Gültig bis“ gilt einschließlich dieses Datums.</p><div class="period-list"></div><button type="button" class="secondary add-period">+ Preiszeitraum hinzufügen</button>';
+ if (!el._pricePeriods.length) {
+  const legacyFrom=String(p.valid_from||''); const legacyTo=String(p.valid_to||'');
+  const diagnostic=document.createElement('p'); diagnostic.className='muted';
+  diagnostic.textContent=(legacyFrom||legacyTo)
+   ? 'Prüfhinweis: Für dieses Preisangebot wurden keine separaten Saisonpreis-Zeiträume geladen. In den älteren Preisfeldern stehen noch die Daten '+(legacyFrom||'—')+' bis '+(legacyTo||'—')+'. Diese alten Angaben wurden nicht verändert.'
+   : 'Prüfhinweis: Für dieses Preisangebot wurden keine separaten Saisonpreis-Zeiträume geladen. In den älteren Datumsfeldern sind ebenfalls keine Gültigkeitsdaten hinterlegt. Deine bestehenden Angaben wurden nicht verändert.';
+  wrap.insertBefore(diagnostic,wrap.querySelector('.period-list'));
+ }
  const list=wrap.querySelector('.period-list');
  const render=()=>{list.innerHTML='';el._pricePeriods.forEach((period,index)=>{const row=document.createElement('div');row.className='grid seasonal-period-row';row.innerHTML='<div><label>Gültig ab</label><input type="date" data-period-key="valid_from" value="'+esc(period.valid_from)+'" required></div><div><label>Gültig bis</label><input type="date" data-period-key="valid_to" value="'+esc(period.valid_to)+'" required></div><div><label>Preis pro Nacht (€)</label><input type="number" min="0" step="0.01" data-period-key="price_amount" value="'+esc(period.price_amount)+'" required></div><div><label>Mindestaufenthalt (Nächte)</label><input type="number" min="1" step="1" data-period-key="min_nights" value="'+esc(period.min_nights)+'"></div><div class="wide"><button type="button" class="danger remove-period">Preiszeitraum entfernen</button></div>';row.querySelectorAll('[data-period-key]').forEach(input=>input.addEventListener('change',()=>{el._pricePeriods[index][input.dataset.periodKey]=input.value}));row.querySelector('.remove-period').onclick=()=>{el._pricePeriods.splice(index,1);render()};list.appendChild(row)});};
  wrap.querySelector('.add-period').onclick=()=>{el._pricePeriods.push({valid_from:'',valid_to:'',price_amount:'',min_nights:''});render()};
