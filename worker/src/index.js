@@ -562,6 +562,8 @@ export default {
             : (typeof payload.booking_url === "string" && /^https?:\/\//i.test(payload.booking_url.trim()) ? payload.booking_url.trim() : "");
           const sourceUrl = /^https?:\/\//i.test(sourceUrlInput) ? sourceUrlInput : fallbackUrl;
           const amount = Number.isFinite(Number(price.price_amount)) && price.price_amount !== null && price.price_amount !== "" ? Number(price.price_amount) : null;
+          const futureAmount = Number.isFinite(Number(price.future_price_amount)) && price.future_price_amount !== null && price.future_price_amount !== "" ? Number(price.future_price_amount) : null;
+          const futureFrom = typeof price.future_price_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(price.future_price_from) ? price.future_price_from : null;
           batch.push(env.DB.prepare(
             `INSERT INTO price_offers
              (id, accommodation_id, price_amount, future_price_amount, future_price_from, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, source_url, source_name, booking_calendar_url, display_order)
