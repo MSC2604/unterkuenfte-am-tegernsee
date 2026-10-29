@@ -473,8 +473,9 @@ function reservationPriceEstimate(a,unitId,arrival,departure){
  const prices=Array.isArray(a.prices)?a.prices:[];const unit=prices.find((p,i)=>String(p.id||('unit-'+i))===String(unitId));
  if(!unit)return {text:'Bei einer allgemeinen Anfrage bestätigt der Vermieter den Gesamtpreis.',amount:null,complete:false};
  const periods=Array.isArray(unit.price_periods)?unit.price_periods:[];
- const nights=Math.round((Date.parse(departure+'T00:00:00Z')-Date.parse(arrival+'T00:00:00Z'))/86400000);let total=0;
- for(let i=0;i<nights;i++){const d=new Date(Date.parse(arrival+'T00:00:00Z')+i*86400000).toISOString().slice(0,10);const p=periods.find(x=>x.valid_from<=d&&x.valid_to>=d);if(p)total+=Number(p.price_amount);else if(!periods.length&&unit.price_amount!==null&&unit.price_amount!==''&&!unit.price_on_request)total+=Number(unit.price_amount);else return {text:'Für mindestens eine Nacht fehlt ein Preiszeitraum. Bitte Gesamtpreis beim Vermieter bestätigen lassen.',amount:null,complete:false};}
+ const nights=Math.round((Date.parse(departure+'T00:00:00Z')-Date.parse(arrival+'T00:00:00Z'))/86400000);let total=0;let requiredNights=Number(unit.min_nights)||1;
+ for(let i=0;i<nights;i++){const d=new Date(Date.parse(arrival+'T00:00:00Z')+i*86400000).toISOString().slice(0,10);const p=periods.find(x=>x.valid_from<=d&&x.valid_to>=d);if(p){total+=Number(p.price_amount);requiredNights=Math.max(requiredNights,Number(p.min_nights)||1);}else if(!periods.length&&unit.price_amount!==null&&unit.price_amount!==''&&!unit.price_on_request)total+=Number(unit.price_amount);else return {text:'Für mindestens eine Nacht fehlt ein Preiszeitraum. Bitte Gesamtpreis beim Vermieter bestätigen lassen.',amount:null,complete:false};}
+ if(nights<requiredNights)return {text:'Für diese Wohnung gilt ein Mindestaufenthalt von '+requiredNights+' '+(requiredNights===1?'Nacht':'Nächten')+'. Bitte passe den Reisezeitraum an.',amount:null,complete:false,minStayNotMet:true};
  return {text:'Preisorientierung für '+nights+' '+(nights===1?'Nacht':'Nächte')+': '+money(total)+' (ohne ggf. zusätzliche Kosten). Der Vermieter bestätigt den verbindlichen Gesamtpreis.',amount:total,complete:true};
 }
 function buildReservationDialog(){
