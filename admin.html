@@ -66,6 +66,22 @@ button.danger{background:#8a3434}
 <div id="status" class="status" role="status">Noch nicht verbunden. Bitte Worker-Adresse und Token prüfen.</div>
 <div id="searchBox" class="hidden"><label for="query">Unterkunftsname oder Link von Tegernsee.com</label><input id="query" placeholder="Name oder https://www.tegernsee.com/..."><button id="runSearch">Recherche starten</button><p class="muted">Sucht ohne feste Personenzahl nach dem Gastgeber und möglichen Einheiten. Bis zu 8 unterschiedliche Treffer werden als Entwurf gesammelt. Preise und Verfügbarkeit sind dadurch nicht bestätigt.</p></div>
 </section>
+<section class="panel" id="site-settings">
+<h2>Seitendarstellung</h2>
+<p class="muted">Überschrift, Untertitel und Titelbild werden zentral gespeichert und sind anschließend für alle Besucher sichtbar.</p>
+<label for="siteTitle">Überschrift</label><input id="siteTitle" maxlength="180" placeholder="Überschrift der Startseite">
+<label for="siteSubtitle">Untertitel</label><textarea id="siteSubtitle" maxlength="500" placeholder="Kurzer Beschreibungstext"></textarea>
+<label for="siteImageFile">Titelbild vom Handy auswählen</label><input id="siteImageFile" type="file" accept="image/*">
+<img id="siteImagePreview" class="accommodation-image-preview" alt="Vorschau des Titelbilds" hidden>
+<button id="saveSiteSettings" type="button">Titelbild und Text speichern</button><button id="removeSiteImage" class="secondary" type="button">Titelbild entfernen</button>
+<p id="siteSettingsStatus" class="status" role="status">Einstellungen werden nach der Anmeldung geladen.</p>
+</section>
+<section class="panel" id="research-usage">
+<h2>Suchkontingent anzeigen</h2>
+<p class="muted">Hier siehst du die in dieser App gezählten Rechercheversuche. Das tatsächliche Restkontingent des Suchanbieters wird nicht direkt von dessen API bereitgestellt.</p>
+<button id="refreshResearchUsage" class="secondary" type="button">Kontingent-Anzeige aktualisieren</button>
+<p id="researchUsageStatus" class="status" role="status">Nach der Anmeldung abrufbar.</p>
+</section>
 <section class="panel"><h2>2. Veröffentlichte Unterkünfte</h2><p class="muted">Hier kannst du veröffentlichte Kacheln samt allen zugehörigen Preisangeboten endgültig aus der Datenbank löschen.</p><div id="published"></div></section><section id="drafts"></section>
 </main>
 <script>
@@ -96,6 +112,15 @@ function setupAccommodationImageTools(container, initialImage, onChange){
 function parse(d){try{return typeof d.payload_json==='string'?JSON.parse(d.payload_json):(d.payload||{})}catch{return {}}}
 async function load(){
  try{
+  try {
+   const settingsResponse=await api('/api/admin/site-settings');
+   const settings=settingsResponse.settings||{};
+   $('siteTitle').value=settings.title||'Ein schöner Platz. Ganz nah am See.';
+   $('siteSubtitle').value=settings.subtitle||'Entdecke Unterkünfte rund um den Tegernsee – von der gemütlichen Ferienwohnung bis zum Hotel für deine besondere Auszeit.';
+   if(settings.image){$('siteImagePreview').src=settings.image;$('siteImagePreview').hidden=false}else{$('siteImagePreview').removeAttribute('src');$('siteImagePreview').hidden=true}
+   $('siteSettingsStatus').textContent='Seiteneinstellungen geladen.';
+  } catch(e) { $('siteSettingsStatus').textContent='Seiteneinstellungen konnten nicht geladen werden: '+e.message; }
+  try { await loadResearchUsage(); } catch(e) { $('researchUsageStatus').textContent='Kontingent-Anzeige nicht verfügbar: '+e.message; }
   const d=await api('/api/admin/drafts');
   drafts=d.drafts||[];
   render();
@@ -178,6 +203,12 @@ function priceField(key,label,value,type='text',wide=false){return '<div class="
 function readPayload(card){const p=JSON.parse(card.dataset.payload||'{}');card.querySelectorAll('[data-key]').forEach(el=>p[el.dataset.key]=el.value.trim());p.prices=Array.from(card.querySelectorAll('.price-card')).map(row=>{const item={display_order:row.closest('.price-list')?.dataset.sortMode==='manual'?Array.from(row.parentElement.children).indexOf(row):null};row.querySelectorAll('[data-price-key]').forEach(el=>item[el.dataset.priceKey]=el.type==='checkbox'?el.checked:el.value.trim());item.price_display_note=item.price_note_enabled&&item.price_note_option?item.price_note_option:'';delete item.price_note_enabled;delete item.price_note_option;for(const k of ['price_amount','occupancy','min_nights','valid_from','valid_to','extra_cleaning_amount'])if(item[k]==='')item[k]=null;else if(['price_amount','future_price_amount','occupancy','min_nights','extra_cleaning_amount'].includes(k))item[k]=Number(item[k]);return item});return p}
 async function save(card,approve){const feedback=card.querySelector('.feedback');try{const p=readPayload(card);if(!p.name){feedback.textContent='Bitte zuerst den Unterkunftsnamen eintragen.';return}if(approve&&!confirm('Diesen Eintrag jetzt veröffentlichen? Bitte Quellen und Angaben vorher prüfen.'))return;await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/update',{method:'POST',body:JSON.stringify({payload:p})});if(approve){await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/approve',{method:'POST',body:'{}'});feedback.textContent='Freigegeben. Eintrag wurde veröffentlicht.';await load()}else{card.dataset.payload=JSON.stringify(p);feedback.textContent='Entwurf gespeichert. Noch nicht veröffentlicht.'}}catch(e){feedback.textContent='Fehler: '+e.message}}
 async function reject(card){if(!confirm('Diesen Entwurf wirklich ablehnen?'))return;try{await api('/api/admin/drafts/'+encodeURIComponent(card.dataset.id)+'/reject',{method:'POST',body:'{}'});status('Entwurf abgelehnt.');await load()}catch(e){card.querySelector('.feedback').textContent='Fehler: '+e.message}}
+async function loadResearchUsage(){const d=await api('/api/admin/research-usage');$('researchUsageStatus').textContent='Gezählte Rechercheversuche in dieser App: '+Number(d.requests||0)+'. '+(d.note||'')+(d.updated_at?' Zuletzt aktualisiert: '+d.updated_at+'.':'')}
+$('refreshResearchUsage').onclick=async()=>{try{await loadResearchUsage()}catch(e){$('researchUsageStatus').textContent='Fehler: '+e.message}};
+let siteImage='';
+$('siteImageFile').addEventListener('change',async()=>{const file=$('siteImageFile').files&&$('siteImageFile').files[0];$('siteImageFile').value='';if(!file)return;if(!file.type.startsWith('image/')){$('siteSettingsStatus').textContent='Bitte eine Bilddatei auswählen.';return}try{siteImage=await compressGalleryImage(file);if(siteImage.length>260000)throw new Error('Das Bild ist zu groß. Bitte ein kleineres Foto wählen.');$('siteImagePreview').src=siteImage;$('siteImagePreview').hidden=false;$('siteSettingsStatus').textContent='Bild ausgewählt. Bitte speichern, damit es für alle Besucher übernommen wird.'}catch(e){siteImage='';$('siteSettingsStatus').textContent=e.message||'Das Bild konnte nicht verarbeitet werden.'}});
+$('removeSiteImage').onclick=()=>{siteImage='';$('siteImagePreview').removeAttribute('src');$('siteImagePreview').hidden=true;$('siteSettingsStatus').textContent='Titelbild entfernt. Zum Übernehmen bitte speichern.'};
+$('saveSiteSettings').onclick=async()=>{const button=$('saveSiteSettings');button.disabled=true;try{const d=await api('/api/admin/site-settings',{method:'POST',body:JSON.stringify({title:$('siteTitle').value,subtitle:$('siteSubtitle').value,image:siteImage})});siteImage=d.settings?.image||'';$('siteSettingsStatus').textContent='Gespeichert. Überschrift, Untertitel und Titelbild sind jetzt zentral für alle Besucher hinterlegt.'}catch(e){$('siteSettingsStatus').textContent='Speichern fehlgeschlagen: '+e.message}finally{button.disabled=false}};
 const tokenInput=$('token'),toggleToken=$('toggleToken');toggleToken.onclick=()=>{const reveal=tokenInput.type==='password';tokenInput.type=reveal?'text':'password';toggleToken.setAttribute('aria-pressed',String(reveal));toggleToken.setAttribute('aria-label',reveal?'Admin-Token verbergen':'Admin-Token anzeigen');toggleToken.title=reveal?'Admin-Token verbergen':'Admin-Token anzeigen';toggleToken.innerHTML=reveal?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"></path><path d="M10.6 10.6a2 2 0 002.8 2.8"></path><path d="M9.9 5.2A10.7 10.7 0 0112 5c6.4 0 10 7 10 7a16.5 16.5 0 01-3.1 3.8"></path><path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 003.2-.5"></path></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>';};
 $('connect').onclick=login;$('logout').onclick=logout;$('newSearch').onclick=()=>$('searchBox').classList.toggle('hidden');
 if(restoreSession()){status('Gespeicherte Sitzung wird geprüft …');load()}else{status('Bitte mit deinem bisherigen Admin-Token anmelden.');}$('runSearch').onclick=async()=>{const query=$('query').value.trim();if(!query){status('Bitte einen Namen oder eine Website eingeben.');return}try{status('Recherche läuft …');const d=await api('/api/admin/research',{method:'POST',body:JSON.stringify({query})});status(d.message||'Recherche gespeichert.');$('query').value='';await load()}catch(e){status('Recherche fehlgeschlagen: '+e.message)}};
