@@ -221,7 +221,7 @@ export default {
                 )
               )
             ORDER BY p.researched_at DESC`
-        ).bind(hasValidStay ? 1 : 0, arrival, departure, arrival, departure, arrival, departure).all();
+        ).bind(hasValidStay ? 1 : 0, arrival, departure, departure, arrival, departure, arrival).all();
         const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
         const periodsByOffer = new Map();
         for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
@@ -461,7 +461,7 @@ export default {
           }
           batch.push(env.DB.prepare("DELETE FROM price_offer_periods WHERE price_offer_id = ?").bind(targetOfferId));
           for (const period of (Array.isArray(price.price_periods) ? price.price_periods : []).slice(0, 30)) {
-            if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(period.valid_from || "")) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(period.valid_to || "")) || period.valid_to < period.valid_from) continue;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_from || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(period.valid_to || "")) || period.valid_to < period.valid_from) continue;
             const periodAmount = Number(period.price_amount); if (!Number.isFinite(periodAmount) || periodAmount < 0) continue;
             const periodMin = Number.isInteger(Number(period.min_nights)) && Number(period.min_nights) > 0 ? Number(period.min_nights) : null;
             batch.push(env.DB.prepare("INSERT INTO price_offer_periods (id, price_offer_id, valid_from, valid_to, price_amount, min_nights) VALUES (?, ?, ?, ?, ?, ?)").bind(id(), targetOfferId, period.valid_from, period.valid_to, periodAmount, periodMin));
