@@ -343,6 +343,16 @@ export default {
           message: "Recherche als Entwurf gespeichert. Noch nicht veröffentlicht; Preise und Kontaktdaten müssen anhand der Quellen geprüft werden."
         }, 201);
       }
+      if (request.method === "GET" && path === "/api/admin/price-period-diagnostics") {
+        await ensurePricePeriodsTable(env);
+        const { results: periods } = await env.DB.prepare(
+          "SELECT pp.id, pp.price_offer_id, pp.valid_from, pp.valid_to, pp.price_amount, pp.min_nights, po.accommodation_id, po.season_label, po.price_unit, po.price_amount AS base_price, a.name AS accommodation_name FROM price_offer_periods pp LEFT JOIN price_offers po ON po.id = pp.price_offer_id LEFT JOIN accommodations a ON a.id = po.accommodation_id ORDER BY a.name COLLATE NOCASE, pp.valid_from"
+        ).all();
+        const { results: offers } = await env.DB.prepare(
+          "SELECT po.id, po.accommodation_id, po.season_label, po.price_amount, po.price_unit, a.name AS accommodation_name FROM price_offers po LEFT JOIN accommodations a ON a.id = po.accommodation_id ORDER BY a.name COLLATE NOCASE"
+        ).all();
+        return json({ periods, offers, period_count: periods.length, offer_count: offers.length });
+      }
       if (request.method === "GET" && path === "/api/admin/accommodations") {
         await ensureBookingCalendarUrlColumn(env);
         await ensurePriceDisplayOrderColumn(env);
