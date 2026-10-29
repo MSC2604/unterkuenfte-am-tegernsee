@@ -225,9 +225,6 @@ export default {
         const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
         const periodsByOffer = new Map();
         for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
-        const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
-        const periodsByOffer = new Map();
-        for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
         const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
         const galleryByOffer = new Map();
         for (const gallery of galleries) { try { galleryByOffer.set(gallery.price_offer_id, JSON.parse(gallery.images_json || "[]")); } catch {} }
@@ -362,6 +359,9 @@ export default {
         const { results: offers } = await env.DB.prepare(
           "SELECT id, accommodation_id, price_amount, currency, price_unit, min_nights, season_label, occupancy, valid_from, valid_to, arrival_date, departure_date, extra_cleaning_amount, tourist_tax_note, additional_costs_note, price_display_note, unit_description, show_price_ab, price_on_request, display_order, source_url, source_name, booking_calendar_url FROM price_offers ORDER BY researched_at DESC"
         ).all();
+        const { results: periodRows } = await env.DB.prepare("SELECT id, price_offer_id, valid_from, valid_to, price_amount, min_nights FROM price_offer_periods ORDER BY valid_from").all();
+        const periodsByOffer = new Map();
+        for (const period of periodRows) { if (!periodsByOffer.has(period.price_offer_id)) periodsByOffer.set(period.price_offer_id, []); periodsByOffer.get(period.price_offer_id).push(period); }
         const { results: galleries } = await env.DB.prepare("SELECT price_offer_id, images_json FROM price_offer_galleries").all();
         const galleryByOffer = new Map();
         for (const gallery of galleries) { try { galleryByOffer.set(gallery.price_offer_id, JSON.parse(gallery.images_json || "[]")); } catch {} }
