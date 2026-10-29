@@ -35,7 +35,9 @@ jobs:
           grep -Fq 'show_tile_price_ab:editArea.querySelector' admin.html
           grep -Fq "const showTileAb=a.show_tile_price_ab" index.html
           grep -Fq "(showTileAb?'ab ':'')" index.html
-          echo "Preispräfix-Einstellung in Verwaltung und öffentlicher Anzeige vorhanden."
+          grep -Fq "field('landlord_name','Name des Vermieters'" admin.html
+          grep -Fq "String(a.landlord_name||'').trim()" index.html
+          echo "Preispräfix-Einstellung und zentrale Vermieteranrede in Verwaltung und öffentlicher Anzeige vorhanden."
       - name: Website-Dateien bereitstellen
         uses: actions/upload-pages-artifact@v3
         with:
