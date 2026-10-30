@@ -660,7 +660,7 @@ function buildReservationDialog(){
   const opening=selected
    ? 'ich möchte unverbindlich anfragen, ob die „'+selectedText+'“ im gewünschten Zeitraum verfügbar ist und welche Kosten für den Aufenthalt entstehen würden.'
    : 'ich möchte unverbindlich anfragen, ob Sie im gewünschten Zeitraum eine passende Unterkunft anbieten können und welche Kosten dafür entstehen würden.';
-  let body=[greeting,'',opening,'', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel.toLocaleLowerCase('de-DE')+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
+  let body=[greeting,'',opening,'', 'MEIN AUFENTHALT','Anreise: '+dateFormat(arrivalDate),'Abreise: '+dateFormat(departureDate),'Gäste: '+adults+' '+(adults===1?'Erwachsene/r':'Erwachsene')+(children?' und '+children+' '+(children===1?'Kind':'Kinder'):'') ,'Gewünschte '+unitLabel+': '+(selected?selectedText:'flexibel – bitte verfügbare Optionen nennen'),'','MEINE KONTAKTDATEN',firstName+' '+lastName,'E-Mail: '+email];
   if(phone)body.push('Telefon: '+phone);
   if(message)body.push('','WEITERE ANGABEN',''+message);
   body.push('','Über eine kurze Rückmeldung zur Verfügbarkeit und zum Gesamtpreis würde ich mich sehr freuen.','','Vielen Dank im Voraus.','','Mit freundlichen Grüßen',''+firstName+' '+lastName);
